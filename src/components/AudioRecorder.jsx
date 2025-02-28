@@ -166,8 +166,12 @@ export default function AudioRecorder({
         if (!audioContextRef.current.audioWorklet) {
           throw new Error("AudioWorklet not supported in this browser");
         }
+
+        const baseUrl = import.meta.env.BASE_URL || '/';
+        console.log("Loading audio worklet with base URL:", baseUrl);
         
-        await audioContextRef.current.audioWorklet.addModule("/mic-processor.js");
+        // Use the correct path with base URL
+        await audioContextRef.current.audioWorklet.addModule(`${baseUrl}mic-processor.js`);
         processorNodeRef.current = new AudioWorkletNode(audioContextRef.current, "mic-processor");
         console.log("Audio worklet loaded successfully");
       } catch (err) {
