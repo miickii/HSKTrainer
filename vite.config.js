@@ -20,7 +20,7 @@ export default defineConfig({
       output: {
         // This ensures worklet files maintain their relative paths
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name.endsWith('.js') && assetInfo.name.includes('worklet')) {
+          if (assetInfo.names.endsWith('.js') && assetInfo.names.includes('worklet')) {
             return 'assets/worklets/[name]-[hash][extname]';
           }
           return 'assets/[name]-[hash][extname]';
