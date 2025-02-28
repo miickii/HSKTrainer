@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState } from "react";
 import { Mic, XCircle } from "lucide-react";
 import { WebSocketUtils } from "../services/websocket-utils";
-import { settingsDB } from "../services/db";
 
 export default function AudioRecorder({ 
   wsRef, 
@@ -14,11 +13,9 @@ export default function AudioRecorder({
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState(null);
   const [audioLevel, setAudioLevel] = useState(0);
-  const [settings, setSettings] = useState({
-    useHoldToSpeak: true,  // Default to hold-to-speak
-    showWaveform: true,
-    sensitivity: 1.5
-  });
+  const [useHoldToSpeak, setUseHoldToSpeak] = useState(true);
+  const [showWaveform, setShowWaveform] = useState(true);
+  const [sensitivity, setSensitivity] = useState(1.5);
   
   // Refs for audio handling
   const isRecordingRef = useRef(false);
@@ -31,25 +28,25 @@ export default function AudioRecorder({
   const animationFrameRef = useRef(null);
   const lastAudioLevelRef = useRef(0);
   
-  // Load settings
+  // Load settings from localStorage
   useEffect(() => {
-    async function loadSettings() {
-      try {
-        const useHoldToSpeak = await settingsDB.getSetting('useHoldToSpeak', true);
-        const showWaveform = await settingsDB.getSetting('showWaveform', true);
-        const sensitivity = await settingsDB.getSetting('sensitivity', 1.5);
-        
-        setSettings({
-          useHoldToSpeak,
-          showWaveform,
-          sensitivity
-        });
-      } catch (error) {
-        console.error("Error loading settings:", error);
+    try {
+      const storedSettings = localStorage.getItem('appSettings');
+      if (storedSettings) {
+        const settings = JSON.parse(storedSettings);
+        if (settings.useHoldToSpeak !== undefined) {
+          setUseHoldToSpeak(settings.useHoldToSpeak);
+        }
+        if (settings.showWaveform !== undefined) {
+          setShowWaveform(settings.showWaveform);
+        }
+        if (settings.sensitivity !== undefined) {
+          setSensitivity(settings.sensitivity);
+        }
       }
+    } catch (error) {
+      console.error("Error loading settings:", error);
     }
-    
-    loadSettings();
   }, []);
   
   // Clean up audio resources
@@ -100,7 +97,7 @@ export default function AudioRecorder({
   
   // Set up key event listeners for space bar
   useEffect(() => {
-    if (disabled || !settings.useHoldToSpeak) return;
+    if (disabled || !useHoldToSpeak) return;
     
     const handleKeyDown = (e) => {
       if (e.code === "Space" && !isRecordingRef.current && !isSending && !disabled) {
@@ -123,7 +120,7 @@ export default function AudioRecorder({
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [settings.useHoldToSpeak, isSending, disabled, isRecording]);
+  }, [useHoldToSpeak, isSending, disabled, isRecording]);
   
   // Start recording
   async function startRecording() {
@@ -196,7 +193,7 @@ export default function AudioRecorder({
           );
           
           // Scale and smooth the level
-          const scaledLevel = Math.min(1, rms * settings.sensitivity * 7); // Adjust sensitivity
+          const scaledLevel = Math.min(1, rms * sensitivity * 7); // Adjust sensitivity
           const smoothedLevel = scaledLevel * 0.3 + lastAudioLevelRef.current * 0.7;
           lastAudioLevelRef.current = smoothedLevel;
           
@@ -208,7 +205,7 @@ export default function AudioRecorder({
           }
           
           // Update visualization if enabled
-          if (settings.showWaveform && canvasRef.current) {
+          if (showWaveform && canvasRef.current) {
             drawVisualization(smoothedLevel);
           }
         }
@@ -228,7 +225,7 @@ export default function AudioRecorder({
       }
       
       // Start visualization loop
-      if (settings.showWaveform) {
+      if (showWaveform) {
         drawVisualization(0);
       }
       
@@ -272,7 +269,7 @@ export default function AudioRecorder({
   
   // Draw audio visualization
   function drawVisualization(level) {
-    if (!canvasRef.current || !settings.showWaveform) return;
+    if (!canvasRef.current || !showWaveform) return;
     
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
@@ -307,12 +304,17 @@ export default function AudioRecorder({
       
       // Draw bar with rounded corners
       ctx.beginPath();
-      ctx.roundRect(x, y, barWidth, barHeight, 4);
+      if (ctx.roundRect) {
+        ctx.roundRect(x, y, barWidth, barHeight, 4);
+      } else {
+        // Fallback for browsers that don't support roundRect
+        ctx.rect(x, y, barWidth, barHeight);
+      }
       ctx.fill();
     }
     
     // Continue animation loop if still recording
-    if (isRecordingRef.current && settings.showWaveform) {
+    if (isRecordingRef.current && showWaveform) {
       animationFrameRef.current = requestAnimationFrame(() => {
         drawVisualization(lastAudioLevelRef.current);
       });
@@ -350,13 +352,18 @@ export default function AudioRecorder({
   }
   
   // Toggle between tap-to-record and hold-to-speak
-  const toggleRecordingMode = async () => {
-    const newValue = !settings.useHoldToSpeak;
-    await settingsDB.saveSetting('useHoldToSpeak', newValue);
-    setSettings(prev => ({
-      ...prev,
-      useHoldToSpeak: newValue
-    }));
+  const toggleRecordingMode = () => {
+    const newValue = !useHoldToSpeak;
+    setUseHoldToSpeak(newValue);
+    
+    // Save to localStorage
+    try {
+      const settings = JSON.parse(localStorage.getItem('appSettings') || '{}');
+      settings.useHoldToSpeak = newValue;
+      localStorage.setItem('appSettings', JSON.stringify(settings));
+    } catch (error) {
+      console.error("Error saving setting:", error);
+    }
   };
   
   return (
@@ -373,7 +380,7 @@ export default function AudioRecorder({
         )}
         
         {/* Audio Visualization Canvas */}
-        {settings.showWaveform && (
+        {showWaveform && (
           <div className="w-full relative rounded-lg overflow-hidden h-24 bg-white">
             <canvas
               ref={canvasRef}
@@ -403,12 +410,12 @@ export default function AudioRecorder({
         {/* Status indicator */}
         <div className="text-center">
           {isRecording ? (
-            <p className="text-sm text-blue-600 animate-pulse">Recording... {settings.useHoldToSpeak ? "Release to stop" : "Tap to stop"}</p>
+            <p className="text-sm text-blue-600 animate-pulse">Recording... {useHoldToSpeak ? "Release to stop" : "Tap to stop"}</p>
           ) : isSending ? (
             <p className="text-sm text-gray-600">Processing audio...</p>
           ) : (
             <p className="text-sm text-gray-500">
-              {settings.useHoldToSpeak
+              {useHoldToSpeak
                 ? "Hold SPACE or press and hold the microphone to record"
                 : "Tap the microphone to start recording"}
             </p>
@@ -417,7 +424,7 @@ export default function AudioRecorder({
         
         {/* Recording Mode Toggle */}
         <div className="flex items-center text-xs text-gray-500">
-          <span className={settings.useHoldToSpeak ? "text-gray-400" : "text-blue-600"}>Tap</span>
+          <span className={useHoldToSpeak ? "text-gray-400" : "text-blue-600"}>Tap</span>
           <button
             onClick={toggleRecordingMode}
             className="mx-2 relative inline-flex items-center h-4 rounded-full w-8 transition-colors ease-in-out duration-200 focus:outline-none bg-gray-200"
@@ -425,15 +432,15 @@ export default function AudioRecorder({
           >
             <span 
               className={`inline-block w-3 h-3 transform transition ease-in-out duration-200 rounded-full bg-white shadow-md ${
-                settings.useHoldToSpeak ? "translate-x-4" : "translate-x-1"
+                useHoldToSpeak ? "translate-x-4" : "translate-x-1"
               }`}
             />
           </button>
-          <span className={settings.useHoldToSpeak ? "text-blue-600" : "text-gray-400"}>Hold</span>
+          <span className={useHoldToSpeak ? "text-blue-600" : "text-gray-400"}>Hold</span>
         </div>
         
         {/* Main recording button */}
-        {settings.useHoldToSpeak ? (
+        {useHoldToSpeak ? (
           <button
             onTouchStart={!disabled ? startRecording : undefined}
             onTouchEnd={!disabled ? stopRecording : undefined}

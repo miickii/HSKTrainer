@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Search, X, Filter, Heart, BookOpen, Volume2 } from "lucide-react";
-import { vocabularyDB } from "../services/db";
+import { ENDPOINTS } from "../services/api";
 
 export default function VocabularyPage() {
   const [words, setWords] = useState([]);
@@ -11,24 +11,30 @@ export default function VocabularyPage() {
   const [showDetailId, setShowDetailId] = useState(null);
   const searchInputRef = useRef(null);
 
-  // Load vocabulary words
+  // Load vocabulary words from backend
   useEffect(() => {
     async function loadVocabulary() {
       try {
         setLoading(true);
         
-        // Get all words from IndexedDB
-        const allWords = await vocabularyDB.getAll();
+        // Fetch from backend API
+        const response = await fetch(ENDPOINTS.vocabulary);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch vocabulary: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
         
         // Sort words by level and then by simplified character
-        allWords.sort((a, b) => {
+        data.sort((a, b) => {
           if (a.level !== b.level) {
             return a.level - b.level;
           }
           return a.simplified.localeCompare(b.simplified, 'zh-CN');
         });
         
-        setWords(allWords);
+        setWords(data);
         setLoading(false);
       } catch (error) {
         console.error("Error loading vocabulary:", error);
@@ -83,7 +89,15 @@ export default function VocabularyPage() {
     e.stopPropagation(); // Prevent opening details
     
     try {
-      const updatedWord = await vocabularyDB.toggleFavorite(id);
+      const response = await fetch(ENDPOINTS.toggleFavorite(id), {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to toggle favorite: ${response.status}`);
+      }
+      
+      const updatedWord = await response.json();
       
       // Update the word in the local state
       setWords(prevWords => 
@@ -100,36 +114,20 @@ export default function VocabularyPage() {
   const toggleDetails = (id) => {
     setShowDetailId(showDetailId === id ? null : id);
   };
-  
-  // Function to play speech synthesis for Chinese text
-  const speakText = (text, e) => {
-    e.stopPropagation(); // Prevent opening details
+
+  // Format the next review date
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'Not set';
     
-    if (!text) return;
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
     
-    // Check if speech synthesis is supported
-    if ('speechSynthesis' in window) {
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
-      
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-CN'; // Chinese language
-      
-      // Try to find a Chinese voice
-      const voices = window.speechSynthesis.getVoices();
-      const chineseVoice = voices.find(voice => 
-        voice.lang.includes('zh') || voice.lang.includes('CN')
-      );
-      
-      if (chineseVoice) {
-        utterance.voice = chineseVoice;
-      }
-      
-      // Set a slower rate for learning purposes
-      utterance.rate = 0.8;
-      
-      window.speechSynthesis.speak(utterance);
-    }
+    if (dateStr === today) return 'Today';
+    if (dateStr === tomorrowStr) return 'Tomorrow';
+    
+    return new Date(dateStr).toLocaleDateString();
   };
 
   return (
@@ -270,12 +268,6 @@ export default function VocabularyPage() {
                   <div>
                     <div className="flex items-center">
                       <span className="text-xl font-bold">{word.simplified}</span>
-                      <button 
-                        onClick={(e) => speakText(word.simplified, e)}
-                        className="ml-2 text-blue-500 hover:text-blue-700"
-                      >
-                        <Volume2 size={16} />
-                      </button>
                     </div>
                     <div className="text-sm text-gray-500">{word.pinyin}</div>
                   </div>
@@ -318,6 +310,20 @@ export default function VocabularyPage() {
                 <div className="mt-1 text-sm">
                   {word.meanings}
                 </div>
+                
+                {/* SRS Level Indicator if available */}
+                {word.srsLevel > 0 && (
+                  <div className="mt-2 flex items-center">
+                    <div className="bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded">
+                      SRS Level {word.srsLevel}
+                    </div>
+                    {word.nextReview && (
+                      <div className="text-xs text-gray-500 ml-2">
+                        Next review: {formatDate(word.nextReview)}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               
               {/* Word Details */}
@@ -359,7 +365,7 @@ export default function VocabularyPage() {
                   {/* Next Review Date */}
                   {word.nextReview && (
                     <div className="text-xs text-gray-500">
-                      Next review: {new Date(word.nextReview).toLocaleDateString()}
+                      Next review: {formatDate(word.nextReview)}
                     </div>
                   )}
                 </div>

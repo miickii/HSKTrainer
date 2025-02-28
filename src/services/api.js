@@ -1,6 +1,6 @@
 // src/services/api.js - API endpoints and REST operations
 
-// Base URL for API requests
+// Get API URLs from environment variables or use defaults
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
 
@@ -35,7 +35,6 @@ export const checkApiConnection = async () => {
 };
 
 // REST API functions
-
 /**
  * Fetch vocabulary data from the server
  * @returns {Promise<Array>} The vocabulary data
@@ -55,7 +54,7 @@ export const fetchVocabulary = async () => {
   }
 };
 
-// WebSocket message types (still needed for reference)
+// WebSocket message types (for reference)
 export const WS_MESSAGE_TYPES = {
   GET_SAMPLE_WORDS: 'get_sample_words',
   UPLOAD_AUDIO: 'upload_audio',
@@ -64,7 +63,13 @@ export const WS_MESSAGE_TYPES = {
   ERROR: 'error'
 };
 
-// Create a basic WebSocket connection
-export const createWebSocketConnection = () => {
-  return new WebSocket(ENDPOINTS.ws);
+/**
+ * Create a WebSocket connection
+ * @param {string} url - Optional custom WebSocket URL
+ * @returns {WebSocket} The WebSocket connection
+ */
+export const createWebSocketConnection = (url = null) => {
+  // Use provided URL or default from ENDPOINTS
+  const wsUrl = url || ENDPOINTS.ws;
+  return new WebSocket(wsUrl);
 };

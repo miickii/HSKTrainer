@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { RefreshCw, CheckCircle, XCircle, Volume2, Wifi, WifiOff } from "lucide-react";
 import AudioRecorder from "../components/AudioRecorder";
-import { vocabularyDB, practiceHistoryDB, sentenceDB } from "../services/db";
 import { WebSocketUtils } from "../services/websocket-utils";
 
-export default function PracticePage({ wsRef, offlineMode, wsConnected, reconnectWebSocket }) {
+export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket }) {
   const [sentence, setSentence] = useState(null);
   const [transcription, setTranscription] = useState("");
   const [updateResults, setUpdateResults] = useState(null);
@@ -20,85 +19,40 @@ export default function PracticePage({ wsRef, offlineMode, wsConnected, reconnec
     setError(null);
     
     try {
-      if (offlineMode) {
-        // Offline mode - get sentence from local DB
-        await getOfflineSentence();
-      } else {
-        // Check WebSocket connection
-        if (!wsConnected || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-          setError("Not connected to server. Please check your connection.");
-          setLoading(false);
-          return;
-        }
+      // Check WebSocket connection
+      if (!wsConnected || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        setError("Not connected to server. Please check your connection.");
+        setLoading(false);
+        return;
+      }
 
-        try {
-          // Use simplified WebSocketUtils to get a sentence
-          const response = await WebSocketUtils.getSentence(wsRef.current, [1, 2, 3]);
-          
-          // Set the sentence
-          setSentence(response.sentence);
+      try {
+        // Use WebSocketUtils to get a sentence
+        const response = await WebSocketUtils.getSentence(wsRef.current, [1, 2, 3]);
+        
+        // Set the sentence
+        setSentence(response.sentence);
 
-          // Save sampled words from the response
-          if (response.sampled_words && response.sampled_words.length > 0) {
-            console.log("Received sampled words:", response.sampled_words);
-            setUsedWordIds(response.sampled_words.map(word => word.id));
-          } else {
-            console.warn("No sampled words received from server");
-          }
-          
-          // Save for offline use
-          await sentenceDB.saveSentence(response.sentence);
-          
-          setLoading(false);
-        } catch (err) {
-          console.error("Error requesting sentence:", err);
-          setError(`Failed to get sentence: ${err.message}`);
-          setLoading(false);
+        // Save sampled words from the response
+        if (response.sampled_words && response.sampled_words.length > 0) {
+          console.log("Received sampled words:", response.sampled_words);
+          setUsedWordIds(response.sampled_words.map(word => word.id));
+        } else {
+          console.warn("No sampled words received from server");
         }
+        
+        setLoading(false);
+      } catch (err) {
+        console.error("Error requesting sentence:", err);
+        setError(`Failed to get sentence: ${err.message}`);
+        setLoading(false);
       }
     } catch (err) {
       console.error("Error requesting sentence:", err);
       setError(`Failed to get sentence: ${err.message}`);
       setLoading(false);
     }
-  }, [offlineMode, wsConnected, wsRef]);
-  
-  // Get a sentence in offline mode
-  const getOfflineSentence = async () => {
-    try {
-      // Try to get a random saved sentence
-      const sentences = await sentenceDB.getRandomSentences(1);
-      
-      if (sentences.length > 0) {
-        setSentence(sentences[0]);
-        
-        // Find matching words
-        const simplified = sentences[0].simplified;
-        const chars = simplified.split('').filter(char => /\p{Script=Han}/u.test(char));
-        
-        // Find matching words in vocabulary
-        const matchedWords = [];
-        for (const char of chars) {
-          const word = await vocabularyDB.getBySimplified(char);
-          if (word) {
-            matchedWords.push(word);
-          }
-        }
-        
-        // Use up to 5 matched words
-        const usedWords = matchedWords.slice(0, 5);
-        setUsedWordIds(usedWords.map(w => w.id));
-      } else {
-        setError("No saved sentences available. Please go online to practice.");
-      }
-      
-      setLoading(false);
-    } catch (error) {
-      console.error("Error getting offline sentence:", error);
-      setError("Failed to get practice content offline. Please go online.");
-      setLoading(false);
-    }
-  };
+  }, [wsConnected, wsRef]);
   
   // Handle transcription start
   const handleTranscriptionStart = () => {
@@ -114,87 +68,6 @@ export default function PracticePage({ wsRef, offlineMode, wsConnected, reconnec
     
     if (data.update_results) {
       setUpdateResults(data.update_results);
-      
-      // In offline mode, process results locally
-      if (offlineMode && usedWordIds.length > 0) {
-        await processOfflineResults(data.transcription, usedWordIds);
-      }
-      
-      // Save practice history
-      const practiceRecord = {
-        date: new Date().toISOString().split('T')[0],
-        sentence: sentence?.simplified || "",
-        transcription: data.transcription,
-        results: data.update_results.map(result => ({
-          wordId: result.id || null,
-          word: result.word,
-          wasCorrect: result.correct
-        }))
-      };
-      
-      practiceHistoryDB.addPracticeRecord(practiceRecord)
-        .catch(err => console.error("Error saving practice record:", err));
-    }
-  };
-  
-  // Process results in offline mode
-  const processOfflineResults = async (transcription, wordIds) => {
-    try {
-      // Simple algorithm: a word is correct if its characters appear in the transcription
-      const results = [];
-      
-      for (const id of wordIds) {
-        const word = await vocabularyDB.getBySimplified(id);
-        
-        if (word) {
-          // Check if each character in the word appears in the transcription
-          const correct = [...word.simplified].every(char => 
-            transcription.includes(char)
-          );
-          
-          // Update word's SRS information
-          await vocabularyDB.updateWordAfterPractice(id, correct);
-          
-          results.push({
-            id: id,
-            word: word.simplified,
-            correct: correct
-          });
-        }
-      }
-      
-      setUpdateResults(results);
-    } catch (error) {
-      console.error("Error processing offline results:", error);
-    }
-  };
-  
-  // Function to play speech synthesis for Chinese text
-  const speakSentence = (text) => {
-    if (!text) return;
-    
-    // Check if speech synthesis is supported
-    if ('speechSynthesis' in window) {
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
-      
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-CN'; // Chinese language
-      
-      // Try to find a Chinese voice
-      const voices = window.speechSynthesis.getVoices();
-      const chineseVoice = voices.find(voice => 
-        voice.lang.includes('zh') || voice.lang.includes('CN')
-      );
-      
-      if (chineseVoice) {
-        utterance.voice = chineseVoice;
-      }
-      
-      // Set a slower rate for learning purposes
-      utterance.rate = 0.8;
-      
-      window.speechSynthesis.speak(utterance);
     }
   };
   
@@ -222,14 +95,6 @@ export default function PracticePage({ wsRef, offlineMode, wsConnected, reconnec
         <div className="w-full max-w-md bg-white rounded-xl shadow-md p-5">
           <div className="text-center">
             <h2 className="text-2xl font-bold mb-2">{sentence.simplified}</h2>
-            
-            <button 
-              onClick={() => speakSentence(sentence.simplified)}
-              className="mt-1 mb-3 text-blue-500 flex items-center justify-center mx-auto"
-            >
-              <Volume2 size={18} className="mr-1" />
-              <span className="text-sm">Listen</span>
-            </button>
             
             {/* Only show pinyin and translation after attempt */}
             {transcription && (

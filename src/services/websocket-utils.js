@@ -91,6 +91,7 @@ export const WebSocketUtils = {
      * 
      * @param {WebSocket} ws - The WebSocket connection
      * @param {Array<number>} audioSamples - Audio samples (float32 array)
+     * @param {Array} sampledWords - Optional array of word objects to check pronunciation for
      * @returns {Promise<Object>} - The transcription result
      */
     sendAudio: async (ws, audioSamples, sampledWords = null) => {
@@ -132,25 +133,10 @@ export const WebSocketUtils = {
         // Add sampled words if provided
         if (sampledWords && Array.isArray(sampledWords)) {
           message.sampled_words = sampledWords;
-          console.log(sampledWords)
           console.log(`Including ${sampledWords.length} sampled words with audio`);
         }
         
         console.log(`Sending ${audioSamples.length} audio samples for transcription`);
         return WebSocketUtils.sendAndWaitForResponse(ws, message, "audio_upload_ack", 20000); // Longer timeout for audio
-    },
-    
-    /**
-     * Send a heartbeat message
-     * 
-     * @param {WebSocket} ws - The WebSocket connection
-     * @returns {Promise<Object>} - The pong response
-     */
-    sendHeartbeat: async (ws) => {
-      const message = {
-        type: "heartbeat"
-      };
-      
-      return WebSocketUtils.sendAndWaitForResponse(ws, message, "pong", 5000);
     }
-  };
+};
