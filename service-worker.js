@@ -1,14 +1,12 @@
 const CACHE_NAME = 'hsk-master-v1';
-const BASE_URL = self.location.pathname.replace(/\/[^\/]*$/, '');
-
 const urlsToCache = [
-  BASE_URL + '/',
-  BASE_URL + '/index.html',
-  BASE_URL + '/manifest.json',
-  BASE_URL + '/mic-processor.js',
-  BASE_URL + '/icons/icon-192.png',
-  BASE_URL + '/icons/icon-512.png',
-  BASE_URL + '/icons/apple-touch-icon.png'
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/mic-processor.js',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', event => {
