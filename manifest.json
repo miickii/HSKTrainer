@@ -2,7 +2,7 @@
     "name": "HSK Master",
     "short_name": "HSK Master",
     "description": "Master Chinese characters with context and audio feedback",
-    "start_url": "/",
+    "start_url": "/HSKTrainer/",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#3b82f6"
