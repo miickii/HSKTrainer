@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="HSK Master" />
+    <meta name="theme-color" content="#3b82f6" />
+    
+    <link rel="manifest" href="/manifest.json" />
+    
+    <title>HSK Master</title>
+    <meta name="description" content="Learn Chinese vocabulary with spaced repetition and pronunciation practice" />
+    
+    <style>
+      html, body {
+        overscroll-behavior-y: none;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        height: 100%;
+        position: fixed;
+        width: 100%;
+        touch-action: manipulation;
+      }
+      
+      #root {
+        height: 100%;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      
+      @supports (-webkit-touch-callout: none) {
+        body {
+          height: 100vh;
+        }
+        
+        input, select, textarea {
+          font-size: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 text-gray-900 font-sans">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
