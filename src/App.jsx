@@ -1,15 +1,19 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import { Mic, BarChart, BookOpen, Settings } from "lucide-react";
+import { Mic, BarChart2, BookOpen, Settings } from "lucide-react";
 import PracticePage from "./pages/PracticePage";
 import VocabularyPage from "./pages/VocabularyPage";
+import ProgressPage from "./pages/ProgressPage"; // Using the updated ProgressPage
 import SettingsPage from "./pages/SettingsPage";
 import { ENDPOINTS, createWebSocketConnection } from "./services/api";
+import { SyncService } from "./services/sync-service"; // Import the new SyncService
 
 function App() {
   const wsRef = useRef(null);
   const [activeTab, setActiveTab] = useState('practice');
   const [status, setStatus] = useState("connecting");
   const [offlineMode, setOfflineMode] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null);
   const heartbeatIntervalRef = useRef(null);
   const [wsConnected, setWsConnected] = useState(false);
 
@@ -28,6 +32,26 @@ function App() {
     }
   }, []);
 
+  // Function to initialize sync
+  const initSync = useCallback(async () => {
+    if (navigator.onLine && !offlineMode) {
+      setSyncing(true);
+      try {
+        const result = await SyncService.synchronizeVocabulary();
+        setSyncStatus(result);
+        console.log("Sync result:", result);
+      } catch (error) {
+        console.error("Sync error:", error);
+        setSyncStatus({
+          success: false,
+          message: `Sync failed: ${error.message}`
+        });
+      } finally {
+        setSyncing(false);
+      }
+    }
+  }, [offlineMode]);
+
   // Set up WebSocket connection
   useEffect(() => {
     // Check if we're online
@@ -36,6 +60,9 @@ function App() {
       setStatus("offline");
       return;
     }
+
+    // Initialize sync on startup
+    SyncService.init().catch(err => console.error("Initial sync error:", err));
 
     // Get custom WebSocket URL from localStorage if available
     const storedWsUrl = localStorage.getItem('serverUrl');
@@ -90,6 +117,9 @@ function App() {
         setTimeout(() => {
           connect();
           setStatus("connecting");
+          
+          // Try to sync when coming back online
+          initSync();
         }, 1000);
       }
     };
@@ -112,7 +142,12 @@ function App() {
       window.removeEventListener('online', handleOnline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [offlineMode, reconnectWebSocket]);
+  }, [offlineMode, reconnectWebSocket, initSync]);
+
+  // Handle manual sync request
+  const handleSyncRequest = () => {
+    initSync();
+  };
 
   // Render content based on active tab
   const renderContent = () => {
@@ -126,8 +161,16 @@ function App() {
         />;
       case 'vocabulary':
         return <VocabularyPage />;
+      case 'progress':
+        return <ProgressPage />;
       case 'settings':
-        return <SettingsPage status={status} />;
+        return <SettingsPage 
+          status={status}
+          offlineMode={offlineMode}
+          onSyncRequest={handleSyncRequest}
+          syncing={syncing}
+          syncStatus={syncStatus}
+        />;
       default:
         return <div>Page not found</div>;
     }
@@ -146,6 +189,13 @@ function App() {
       {status !== "connected" && !offlineMode && (
         <div className="bg-blue-100 text-blue-800 text-center text-sm py-1 px-4 safe-left safe-right">
           Connection status: {status}
+        </div>
+      )}
+
+      {/* Sync status message */}
+      {syncing && (
+        <div className="bg-blue-100 text-blue-800 text-center text-sm py-1 px-4 safe-left safe-right">
+          Syncing vocabulary data...
         </div>
       )}
       
@@ -176,6 +226,14 @@ function App() {
           >
             <BookOpen size={24} />
             <span className="text-xs mt-1">Words</span>
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('progress')}
+            className={`p-3 flex flex-col items-center ${activeTab === 'progress' ? 'text-blue-500' : 'text-gray-500'}`}
+          >
+            <BarChart2 size={24} />
+            <span className="text-xs mt-1">Progress</span>
           </button>
           
           <button 

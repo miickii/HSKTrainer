@@ -9,11 +9,14 @@ import {
   CloudOff,
   BookOpen,
   Wifi,
-  Info
+  Info,
+  Check,
+  AlertCircle
 } from "lucide-react";
 import { settingsDB } from "../services/db";
+import { SyncService } from "../services/sync-service";
 
-export default function SettingsPage({ status, offlineMode }) {
+export default function SettingsPage({ status, offlineMode, onSyncRequest, syncing, syncStatus }) {
   const [settings, setSettings] = useState({
     useHoldToSpeak: true,
     showWaveform: true,
@@ -31,6 +34,32 @@ export default function SettingsPage({ status, offlineMode }) {
   const [showHSKSelect, setShowHSKSelect] = useState(false);
   const [appVersion, setAppVersion] = useState('1.0.0');
   const [storageUsage, setStorageUsage] = useState(null);
+  
+  // Handle sync if onSyncRequest is not provided
+  const handleSyncRequest = () => {
+    if (onSyncRequest) {
+      onSyncRequest();
+    } else {
+      // Fallback implementation if onSyncRequest prop was not provided
+      syncData();
+    }
+  };
+  
+  // Fallback sync implementation
+  const syncData = async () => {
+    if (offlineMode) return;
+    
+    try {
+      setSaving(true);
+      await SyncService.synchronizeVocabulary();
+      alert("Vocabulary data synchronized successfully");
+    } catch (error) {
+      console.error("Error syncing vocabulary:", error);
+      alert(`Failed to sync: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
   
   // Load settings
   useEffect(() => {
@@ -423,19 +452,44 @@ export default function SettingsPage({ status, offlineMode }) {
                 </div>
               )}
               
-              {/* Download Vocabulary */}
+              {/* Sync Data */}
               <div className="p-4 flex justify-between items-center">
                 <div>
-                  <div className="font-medium">Download Vocabulary</div>
-                  <div className="text-sm text-gray-500">Save for offline use</div>
+                  <div className="font-medium">Sync Vocabulary Data</div>
+                  <div className="text-sm text-gray-500">Update from server</div>
+                  
+                  {/* Show sync status if available */}
+                  {syncStatus && (
+                    <div className={`mt-2 text-sm flex items-center ${
+                      syncStatus.success ? "text-green-600" : "text-red-600"
+                    }`}>
+                      {syncStatus.success ? 
+                        <Check size={14} className="mr-1" /> : 
+                        <AlertCircle size={14} className="mr-1" />
+                      }
+                      {syncStatus.message}
+                    </div>
+                  )}
+                  
+                  {/* Show last sync time */}
+                  <div className="mt-1 text-xs text-gray-500">
+                    Last sync: {localStorage.getItem('lastSync') ? 
+                      new Date(localStorage.getItem('lastSync')).toLocaleString() : 
+                      'Never'}
+                  </div>
                 </div>
                 <button 
-                  className="flex items-center px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg text-sm font-medium"
-                  onClick={() => alert("Vocabulary downloaded for offline use")}
-                  disabled={offlineMode}
+                  onClick={handleSyncRequest}
+                  disabled={syncing || offlineMode}
+                  className={`flex items-center px-3 py-1.5 rounded-lg text-sm font-medium ${
+                    syncing ? 
+                      "bg-gray-200 text-gray-500" : 
+                      offlineMode ?
+                        "bg-gray-200 text-gray-500" :
+                        "bg-blue-100 text-blue-800 hover:bg-blue-200"
+                  }`}
                 >
-                  <Download size={16} className="mr-1" />
-                  Download
+                  {syncing ? "Syncing..." : "Sync Now"}
                 </button>
               </div>
               
