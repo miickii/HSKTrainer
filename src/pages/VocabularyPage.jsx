@@ -17,14 +17,24 @@ export default function VocabularyPage() {
       try {
         setLoading(true);
         
-        // Fetch from backend API
-        const response = await fetch(ENDPOINTS.vocabulary);
+        // Try to load from IndexedDB first
+        let data = await vocabularyDB.getAll();
         
-        if (!response.ok) {
-          throw new Error(`Failed to fetch vocabulary: ${response.status} ${response.statusText}`);
+        // If no data in IndexedDB, fetch from API (with ngrok header)
+        if (data.length === 0) {
+          console.log("No data in local DB, fetching from API...");
+          const response = await fetch(ENDPOINTS.vocabulary, {
+            headers: {
+              'ngrok-skip-browser-warning': 'true'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch vocabulary: ${response.status} ${response.statusText}`);
+          }
+          
+          data = await response.json();
         }
-        
-        const data = await response.json();
         
         // Sort words by level and then by simplified character
         data.sort((a, b) => {
