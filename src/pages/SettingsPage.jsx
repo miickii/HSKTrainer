@@ -11,7 +11,8 @@ import {
   Wifi,
   Info,
   Check,
-  AlertCircle
+  AlertCircle,
+  Server
 } from "lucide-react";
 import { settingsDB } from "../services/db";
 import { SyncService } from "../services/sync-service";
@@ -34,6 +35,17 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
   const [showHSKSelect, setShowHSKSelect] = useState(false);
   const [appVersion, setAppVersion] = useState('1.0.0');
   const [storageUsage, setStorageUsage] = useState(null);
+  
+  // Server connection settings
+  const [serverBaseUrl, setServerBaseUrl] = useState(() => {
+    // Extract from localStorage if available, otherwise default
+    const storedUrl = localStorage.getItem('serverUrl');
+    if (storedUrl) {
+      // Remove http:// or https:// to get just the base URL
+      return storedUrl.replace(/^https?:\/\//, '');
+    }
+    return 'localhost:8000'; // Default value
+  });
   
   // Handle sync if onSyncRequest is not provided
   const handleSyncRequest = () => {
@@ -59,6 +71,22 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
     } finally {
       setSaving(false);
     }
+  };
+  
+  // Save server URLs
+  const saveServerUrls = () => {
+    // Save both URLs
+    localStorage.setItem('serverUrl', `https://${serverBaseUrl}`);
+    localStorage.setItem('wsUrl', `wss://${serverBaseUrl}`);
+    
+    // Set flag to trigger sync after reload
+    localStorage.setItem('needsSync', 'true');
+    
+    // Notify user
+    alert('Server URLs updated. The app will now reload to apply changes.');
+    
+    // Reload the page to apply changes
+    window.location.reload();
   };
   
   // Load settings
@@ -177,8 +205,11 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
         // Show loading state
         setSaving(true);
         
+        // Get the current server URL
+        const apiUrl = localStorage.getItem('serverUrl') || import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        
         // Call the reset API
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/reset-all-words`, {
+        const response = await fetch(`${apiUrl}/api/reset-all-words`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -235,6 +266,76 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
               <span className="text-sm text-gray-500">
                 {offlineMode ? "Some features limited" : `Status: ${status}`}
               </span>
+            </div>
+          </div>
+          
+          {/* Server Configuration */}
+          <div className="bg-white rounded-xl shadow-md mb-6">
+            <div className="p-4 border-b">
+              <div className="flex items-center">
+                <Server size={18} className="text-blue-500 mr-2" />
+                <h2 className="text-lg font-medium">Server Connection</h2>
+              </div>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              {/* Current Connection Status */}
+              <div className="mb-4 p-2 bg-gray-50 rounded-md">
+                <div className="flex items-center">
+                  <div 
+                    className={`w-3 h-3 rounded-full mr-2 ${
+                      status === "connected" ? "bg-green-500" : 
+                      status === "connecting" ? "bg-yellow-500" :
+                      "bg-red-500"
+                    }`}
+                  ></div>
+                  <span className="text-sm">
+                    Status: {status}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Server Base URL */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Server URL
+                </label>
+                <div className="flex items-center">
+                  <span className="bg-gray-100 px-3 py-2 rounded-l-md border border-r-0 border-gray-300 text-gray-500">
+                    https://
+                  </span>
+                  <input
+                    type="text"
+                    value={serverBaseUrl}
+                    onChange={(e) => setServerBaseUrl(e.target.value)}
+                    placeholder="your-ngrok-url.ngrok.io"
+                    className="flex-1 p-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="bg-gray-100 px-3 py-2 rounded-r-md border border-l-0 border-gray-300 text-gray-500">
+                    /
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Example: abcd1234.ngrok.io
+                </p>
+              </div>
+              
+              {/* Preview of URLs that will be used */}
+              <div className="text-xs text-gray-600 space-y-1 bg-gray-50 p-2 rounded">
+                <div><strong>API URL:</strong> https://{serverBaseUrl}</div>
+                <div><strong>WebSocket URL:</strong> wss://{serverBaseUrl}</div>
+              </div>
+              
+              {/* Save Button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={saveServerUrls}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-md"
+                  disabled={saving}
+                >
+                  Save and Reload
+                </button>
+              </div>
             </div>
           </div>
         

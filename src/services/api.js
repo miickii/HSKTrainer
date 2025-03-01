@@ -1,8 +1,12 @@
 // src/services/api.js - API endpoints and REST operations
 
-// Get API URLs from environment variables or use defaults
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
+// Get API URLs from localStorage first, then environment variables, then defaults
+const API_URL = localStorage.getItem('serverUrl') || import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const WS_URL = localStorage.getItem('wsUrl') || import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
+
+// For debugging
+console.log(`Using API_URL: ${API_URL}`);
+console.log(`Using WS_URL: ${WS_URL}`);
 
 // API endpoints
 export const ENDPOINTS = {
@@ -11,7 +15,7 @@ export const ENDPOINTS = {
   
   // REST API endpoints
   vocabulary: `${API_URL}/api/vocabulary`,
-  downloadVocabulary: `${API_URL}/api/download-vocabulary`,
+  downloadVocabulary: `${API_URL}/api/vocabulary`, // Point to same endpoint as vocabulary
   updateWord: (wordId) => `${API_URL}/api/update-word/${wordId}`,
   toggleFavorite: (wordId) => `${API_URL}/api/toggle-favorite/${wordId}`,
   transcribe: `${API_URL}/api/transcribe`,
@@ -41,13 +45,23 @@ export const checkApiConnection = async () => {
  */
 export const fetchVocabulary = async () => {
   try {
-    const response = await fetch(ENDPOINTS.downloadVocabulary);
+    const response = await fetch(ENDPOINTS.vocabulary);
     
     if (!response.ok) {
       throw new Error(`Server returned ${response.status}: ${response.statusText}`);
     }
     
-    return await response.json();
+    const data = await response.json();
+    
+    // Handle different response formats (array directly or nested in an object)
+    const words = Array.isArray(data) ? data : 
+                  (data && Array.isArray(data.words)) ? data.words : [];
+    
+    if (words.length === 0) {
+      console.warn("No vocabulary words received from server");
+    }
+    
+    return words;
   } catch (error) {
     console.error('Failed to fetch vocabulary:', error);
     throw error;
@@ -71,5 +85,6 @@ export const WS_MESSAGE_TYPES = {
 export const createWebSocketConnection = (url = null) => {
   // Use provided URL or default from ENDPOINTS
   const wsUrl = url || ENDPOINTS.ws;
+  console.log(`Creating WebSocket connection to ${wsUrl}`);
   return new WebSocket(wsUrl);
 };
