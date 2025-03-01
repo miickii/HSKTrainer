@@ -17,6 +17,40 @@ function App() {
   const heartbeatIntervalRef = useRef(null);
   const [wsConnected, setWsConnected] = useState(false);
 
+  const connect = useCallback(() => {
+    // Create WebSocket connection
+    wsRef.current = createWebSocketConnection(
+      localStorage.getItem('wsUrl') || ENDPOINTS.ws
+    );
+    console.log("Creating WebSocket connection to:", wsRef.current.url);
+
+    wsRef.current.onopen = () => {
+      console.log("WebSocket connected successfully");
+      setStatus("connected");
+      setOfflineMode(false);
+      setWsConnected(true);
+    };
+
+    wsRef.current.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      setStatus("error");
+      setWsConnected(false);
+    };
+
+    wsRef.current.onclose = (event) => {
+      console.log("WebSocket closed with code:", event?.code, "reason:", event?.reason);
+      setStatus("closed");
+      setWsConnected(false);
+      
+      // Try to reconnect after a delay if page is still open
+      setTimeout(() => {
+        if (document.visibilityState === "visible" && navigator.onLine) {
+          connect();
+        }
+      }, 3000);
+    };
+  }, [setStatus, setOfflineMode, setWsConnected]);
+
   // Function to reconnect WebSocket
   const reconnectWebSocket = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState !== WebSocket.CONNECTING) {
@@ -30,7 +64,7 @@ function App() {
       // Create a new connection
       connect();
     }
-  }, []);
+  }, [connect]);
 
   // Function to initialize sync
   const initSync = useCallback(async () => {
@@ -142,7 +176,7 @@ function App() {
       window.removeEventListener('online', handleOnline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [offlineMode, reconnectWebSocket, initSync]);
+  }, [offlineMode, connect, initSync]);
 
   // Handle manual sync request
   const handleSyncRequest = () => {

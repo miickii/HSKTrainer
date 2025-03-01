@@ -76,17 +76,32 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
   // Save server URLs
   const saveServerUrls = () => {
     // Save both URLs
-    localStorage.setItem('serverUrl', `https://${serverBaseUrl}`);
-    localStorage.setItem('wsUrl', `wss://${serverBaseUrl}`);
+    const baseUrl = serverBaseUrl.trim();
+    localStorage.setItem('serverUrl', `https://${baseUrl}`);
+    localStorage.setItem('wsUrl', `wss://${baseUrl}`);
     
     // Set flag to trigger sync after reload
     localStorage.setItem('needsSync', 'true');
     
-    // Notify user
-    alert('Server URLs updated. The app will now reload to apply changes.');
-    
-    // Reload the page to apply changes
-    window.location.reload();
+    // Show instruction modal or alert
+    if (baseUrl.includes('ngrok-free.app')) {
+      // Check if this is an ngrok URL
+      const confirmMessage = 
+        "Important: You're using an ngrok URL.\n\n" +
+        "1. Please open this URL in a new tab first: https://" + baseUrl + "\n" +
+        "2. Click 'Visit Site' on the ngrok warning page\n" +
+        "3. Then come back and click OK to reload the app\n\n" +
+        "This step is necessary for the app to work correctly.";
+      
+      if (window.confirm(confirmMessage)) {
+        // Reload the page to apply changes
+        window.location.reload();
+      }
+    } else {
+      // Not an ngrok URL, proceed normally
+      alert('Server URLs updated. The app will now reload to apply changes.');
+      window.location.reload();
+    }
   };
   
   // Load settings
