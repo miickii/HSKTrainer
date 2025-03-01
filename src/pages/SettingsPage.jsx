@@ -78,7 +78,7 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
     // Save both URLs
     const baseUrl = serverBaseUrl.trim();
     localStorage.setItem('serverUrl', `https://${baseUrl}`);
-    localStorage.setItem('wsUrl', `wss://${baseUrl}`);
+    localStorage.setItem('wsUrl', `wss://${baseUrl}/ws/api`);
     
     // Set flag to trigger sync after reload
     localStorage.setItem('needsSync', 'true');

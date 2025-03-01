@@ -84,7 +84,13 @@ export const WS_MESSAGE_TYPES = {
  */
 export const createWebSocketConnection = (url = null) => {
   // Use provided URL or default from ENDPOINTS
-  const wsUrl = url || ENDPOINTS.ws;
+  let wsUrl = url || ENDPOINTS.ws;
+  
+  // Ensure the WebSocket URL includes the path
+  if (!wsUrl.includes('/ws/api')) {
+    wsUrl = wsUrl.endsWith('/') ? `${wsUrl}ws/api` : `${wsUrl}/ws/api`;
+  }
+  
   console.log(`Creating WebSocket connection to ${wsUrl}`);
   return new WebSocket(wsUrl);
 };
