@@ -57,7 +57,11 @@ export const SyncService = {
     
     try {
       // Fetch vocabulary from server
-      const response = await fetch(ENDPOINTS.vocabulary);
+      const response = await fetch(ENDPOINTS.vocabulary, {
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      });
       
       if (!response.ok) {
         throw new Error(`Server returned ${response.status}: ${response.statusText}`);
