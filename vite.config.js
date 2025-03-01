@@ -6,7 +6,8 @@ import { resolve } from 'path'
 export default defineConfig({
   server: {
     host: '0.0.0.0',  // This exposes the server to all network interfaces
-    port: 5173
+    port: 5173,
+    allowedHosts: ['7aec-87-63-77-133.ngrok-free.app']
   },
   plugins: [react()],
   base: '/HSKTrainer/',
