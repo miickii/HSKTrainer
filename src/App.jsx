@@ -204,13 +204,6 @@ function App() {
         </div>
       )}
       
-      {/* Show offline practice notice */}
-      {preferOfflinePractice && activeTab === 'practice' && (
-        <div className="bg-red-500 text-white text-center text-xs py-1 px-4 safe-left safe-right">
-          Offline Practice Mode: Character Recognition
-        </div>
-      )}
-      
       {/* App Header - Optimized for iPhone notch with safe area */}
       <header className="bg-white py-4 px-4 safe-top safe-left safe-right border-b border-neutral-100">
         <h1 className="text-xl font-bold text-center text-neutral-900">HSK Master</h1>

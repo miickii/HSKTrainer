@@ -82,6 +82,7 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
         if (examples && examples.length > 0) {
           // Select a random example
           const randomIndex = Math.floor(Math.random() * examples.length);
+          console.log(examples[randomIndex])
           setExample(examples[randomIndex]);
         } else {
           setExample(null);
@@ -173,13 +174,6 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
 
   return (
     <div className="h-full flex flex-col p-3">
-      {/* Connection status indicator - only show when disconnected */}
-      {!wsConnected && (
-        <div className="text-xs text-red-500 text-center w-full mb-2 flex items-center justify-center">
-          <WifiOff size={12} className="inline mr-1" /> Disconnected
-        </div>
-      )}
-      
       {/* Main content area */}
       <div className="flex flex flex-col">
         {/* Always show the character and example when available */}
@@ -188,6 +182,13 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
             <div className="text-center">
               {/* Character and HSK level */}
               <h2 className="text-2xl font-bold mb-1">{example.simplified}</h2>
+
+              {transcription && (
+                <div>
+                  <h2 className="text-xl mb-1">{example.pinyin}</h2>
+                  <h2 className="text-xl mb-1">{example.english}</h2>
+                </div>
+              )}
               
               {currentWord.level && (
                 <div className="mb-2">

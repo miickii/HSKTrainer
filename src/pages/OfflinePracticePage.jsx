@@ -59,22 +59,24 @@ export default function OfflinePracticePage() {
       
       // Try to get a word due for review at one of the selected HSK levels
       for (const level of hskLevels) {
-        const dueWords = await vocabularyDB.getDueForReview(1, level);
+        const dueWords = await vocabularyDB.getDueForReview(40, level);
         if (dueWords && dueWords.length > 0) {
-          word = dueWords[0];
-          break;
+            const randomWordIndex = Math.floor(Math.random() * dueWords.length);
+            word = dueWords[randomWordIndex];
+            break;
         }
       }
       
       // If no word due for review, get a random word
       if (!word) {
-        const randomWords = await vocabularyDB.getRandomWords(1, 
+        const randomWords = await vocabularyDB.getRandomWords(40, 
           hskLevels.length === 1 ? hskLevels[0] : null, 
           []
         );
         
         if (randomWords && randomWords.length > 0) {
-          word = randomWords[0];
+            const randomWordIndex = Math.floor(Math.random() * randomWords.length);
+            word = randomWords[randomWordIndex];
         }
       }
       
@@ -137,31 +139,14 @@ export default function OfflinePracticePage() {
                 {example ? (
                 <div className="mt-4">
                     <div className="text-xl mt-2 mb-4 bg-neutral-50 p-3 rounded-lg border border-neutral-100">
-                    {example.simplified && example.simplified.split('').map((char, index) => (
-                        <span 
-                        key={index}
-                        className={char === currentWord.simplified ? 
-                            "text-red-500 font-bold border-b-2 border-red-400" : ""}
-                        >
-                        {char}
-                        </span>
-                    ))}
+                        {example.simplified}
                     </div>
                     
-                    {showHint && (
+                    {answerStatus && (
                     <div className="mt-3 text-neutral-700">
-                        <div className="text-sm text-red-500">{exampleSentence.pinyin}</div>
-                        <div className="text-sm italic mt-1">{exampleSentence.english}</div>
+                        <div className="text-sm text-red-500">{example.pinyin}</div>
+                        <div className="text-sm italic mt-1">{example.english}</div>
                     </div>
-                    )}
-                    
-                    {!showHint && (
-                    <button 
-                        onClick={() => setShowHint(true)}
-                        className="mt-2 text-sm text-red-500"
-                    >
-                        Show pinyin and translation
-                    </button>
                     )}
                 </div>
                 ) : (
@@ -225,51 +210,16 @@ export default function OfflinePracticePage() {
           
           {/* Show Answer Status */}
           {answerStatus && (
-            <div className={`mt-4 text-center px-4 py-2 rounded-lg ${
-              answerStatus === "correct" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-600"
-            }`}>
-              {answerStatus === "correct" ? (
-                <span className="flex items-center justify-center">
-                  <CheckCircle size={20} className="mr-2" />
-                  Correct!
-                </span>
-              ) : (
-                <span className="flex items-center justify-center">
-                  <XCircle size={20} className="mr-2" />
-                  Practice more
-                </span>
-              )}
-            </div>
-          )}
-          
-          {/* Details Section (shown after answering) */}
-          {showDetails && (
-            <div className="mt-4 pt-4 border-t border-neutral-100 w-full">
-              <p className="text-md text-neutral-700 mb-2">Pinyin: <span className="font-medium text-red-500">{currentWord.pinyin}</span></p>
-              <p className="text-md text-neutral-700 mb-3">Meaning: <span className="font-medium">{currentWord.meanings}</span></p>
-              
-              {/* Progress Information */}
-              <div className="mt-4 bg-neutral-50 p-3 rounded-lg border border-neutral-100">
-                <div className="flex justify-between mb-1">
-                  <span className="text-sm text-neutral-600">Practiced correctly:</span>
-                  <span className="text-sm font-medium">{currentWord.correctCount || 0} times</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-neutral-600">SRS Level:</span>
-                  <span className="text-sm font-medium">{currentWord.srsLevel || 0}</span>
-                </div>
-              </div>
-              
-              {/* Next Button if incorrect */}
-              {answerStatus === "incorrect" && (
+            <div className={`mt-4 text-center px-4 py-2 rounded-lg`}>
                 <button
-                  onClick={loadNewWord}
-                  className="w-full mt-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors duration-200"
+                    onClick={loadNewWord}
+                    disabled={loading}
+                    className={`p-4 rounded-full shadow-md z-10 ${
+                    answerStatus === "correct" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-600"
+                    }`}
                 >
-                  <ArrowRight className="inline-block mr-2" size={18} />
-                  Next Character
+                    <RefreshCw size={24} />
                 </button>
-              )}
             </div>
           )}
         </div>
@@ -293,30 +243,6 @@ export default function OfflinePracticePage() {
           </div>
         </div>
       )}
-      
-      {/* Toggle Details Button */}
-      {currentWord && !showDetails && (
-        <button
-          onClick={() => setShowDetails(true)}
-          className="px-4 py-2 bg-neutral-100 text-neutral-700 rounded-lg flex items-center"
-        >
-          <Eye size={18} className="mr-2" />
-          Show Details
-        </button>
-      )}
-      
-      {/* Refresh Button */}
-      <button
-        onClick={loadNewWord}
-        disabled={loading}
-        className={`fixed right-4 bottom-20 p-4 rounded-full shadow-md z-10 ${
-          loading
-            ? 'bg-neutral-300 text-white' 
-            : 'bg-red-500 text-white hover:bg-red-600'
-        }`}
-      >
-        <RefreshCw size={24} />
-      </button>
     </div>
   );
 }
