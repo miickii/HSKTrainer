@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Search, X, Filter, Heart, BookOpen, Volume2 } from "lucide-react";
 import { vocabularyDB } from "../services/db";
+import { v4 as uuidv4 } from 'uuid';
 
 export default function VocabularyPage() {
   const [words, setWords] = useState([]);
@@ -32,6 +33,11 @@ export default function VocabularyPage() {
             return a.level - b.level;
           }
           return a.simplified.localeCompare(b.simplified, 'zh-CN');
+        });
+
+        data.forEach(word => {
+          word.examples = JSON.parse(word.examples);
+          console.log(word.examples)
         });
         
         setWords(data);
@@ -351,7 +357,7 @@ export default function VocabularyPage() {
                       <div className="font-medium text-neutral-800">{word.srsLevel || 0}</div>
                     </div>
                   </div>
-                  
+
                   {/* Additional Info */}
                   {word.traditional && word.traditional !== word.simplified && (
                     <div className="mb-2">
@@ -369,10 +375,29 @@ export default function VocabularyPage() {
                   
                   {/* Next Review Date */}
                   {word.nextReview && (
-                    <div className="text-xs text-neutral-500">
+                    <div className="text-xs text-neutral-500 mb-4">
                       Next review: {formatDate(word.nextReview)}
                     </div>
                   )}
+
+                  <h2 className="text-lg text-red-600 font-bold mb-2">Examples:</h2>
+
+                  {word.examples.map((example, index) => (
+                    <div 
+                      key={uuidv4()}
+                      className="mb-2 border-b"
+                    >
+                      <div className="mb-2">
+                        <span className="">{example.simplified}</span>
+                      </div>
+                      <div className="mb-2">
+                        <span className="text-neutral-800">{example.pinyin}</span>
+                      </div>
+                      <div className="mb-2">
+                        <span className="text-neutral-800">{example.english}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
