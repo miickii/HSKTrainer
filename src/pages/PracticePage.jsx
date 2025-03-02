@@ -83,9 +83,7 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
           // Select a random example
           const randomIndex = Math.floor(Math.random() * examples.length);
           setExample(examples[randomIndex]);
-          console.log("Selected example:", examples[randomIndex]);
         } else {
-          console.log("No examples found for word:", word.simplified);
           setExample(null);
         }
       } else {
@@ -127,17 +125,19 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
         // Set results for display
         setResults({
           correct: containsWord,
-          word: currentWord.simplified,
-          pinyin: currentWord.pinyin,
-          meanings: currentWord.meanings
+          word: currentWord.simplified
         });
         
-        // Automatically load next word after correct answer (after a short delay)
+        // Automatically load next word after correct answer (after a delay) if needed
+        // Uncomment this if you want to auto-advance on correct answers
+        /*
         if (containsWord) {
           setTimeout(() => {
             requestNewWord();
-          }, 2000);
+          }, 3000);
         }
+        */
+        
       } catch (err) {
         console.error("Error processing transcription:", err);
         setError("Error evaluating your pronunciation");
@@ -150,147 +150,145 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
     requestNewWord();
   }, [requestNewWord]);
 
+  // Function to render the example sentence with highlighted target character
+  const renderExampleSentence = () => {
+    if (!example || !example.chinese || !currentWord) return null;
+    
+    return (
+      <div className="mt-3 mb-2 p-3 bg-neutral-50 rounded-lg border border-neutral-100">
+        <div className="text-base leading-relaxed">
+          {example.chinese.split('').map((char, index) => (
+            <span 
+              key={index}
+              className={char === currentWord.simplified ? 
+                "text-red-600 font-bold" : ""}
+            >
+              {char}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="p-4 flex flex-col items-center space-y-6">
-      {/* Connection status indicator */}
-      <div className="text-xs text-gray-500 text-center w-full">
-        {wsConnected ? 
-          <span className="text-green-500 flex items-center justify-center">
-            <Wifi size={12} className="inline mr-1" /> Connected
-          </span> : 
-          <span className="text-red-500 flex items-center justify-center">
-            <WifiOff size={12} className="inline mr-1" /> Disconnected
-          </span>
-        }
+    <div className="h-full flex flex-col p-3">
+      {/* Connection status indicator - only show when disconnected */}
+      {!wsConnected && (
+        <div className="text-xs text-red-500 text-center w-full mb-2 flex items-center justify-center">
+          <WifiOff size={12} className="inline mr-1" /> Disconnected
+        </div>
+      )}
+      
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col">
+        {/* Always show the character and example when available */}
+        {currentWord && !loading ? (
+          <div className="w-full max-w-md mx-auto bg-white rounded-xl shadow-sm border border-neutral-100 p-4 mb-3">
+            <div className="text-center">
+              {/* Character and HSK level */}
+              <h2 className="text-2xl font-bold mb-1">{example.simplified}</h2>
+              
+              {currentWord.level && (
+                <div className="mb-2">
+                  <span className="px-2 py-1 bg-red-50 text-red-600 rounded-full text-xs font-medium">
+                    HSK {currentWord.level}
+                  </span>
+                </div>
+              )}
+              
+              {/* Example sentence */}
+              {renderExampleSentence()}
+            </div>
+          </div>
+        ) : loading ? (
+          <div className="w-full max-w-md mx-auto bg-white rounded-xl shadow-sm border border-neutral-100 p-4 text-center mb-3">
+            <div className="flex justify-center items-center py-6">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
+            </div>
+            <p className="text-neutral-500">Loading character...</p>
+          </div>
+        ) : error ? (
+          <div className="w-full max-w-md mx-auto bg-white rounded-xl shadow-sm border border-neutral-100 p-4 text-center mb-3">
+            <div className="py-4 text-red-500">{error}</div>
+            <div className="flex space-x-2 justify-center">
+              <button 
+                onClick={requestNewWord}
+                className="mt-2 px-4 py-2 bg-red-500 text-white rounded-lg font-medium"
+              >
+                Try Again
+              </button>
+              <button 
+                onClick={reconnectWebSocket}
+                className="mt-2 px-4 py-2 bg-neutral-200 text-neutral-700 rounded-lg font-medium"
+              >
+                Reconnect
+              </button>
+            </div>
+          </div>
+        ) : null}
+        
+        {/* Transcription results section */}
+        {transcription && (
+          <div className="w-full max-w-md mx-auto bg-white rounded-xl shadow-sm border border-neutral-100 p-4 mb-3">
+            <div className="text-center">
+              <h3 className="text-lg font-medium text-neutral-800 mb-2">Your Pronunciation</h3>
+              <p className="text-base bg-neutral-50 p-3 rounded-lg border border-neutral-100">{transcription}</p>
+              
+              {/* Show results when available */}
+              {results && (
+                <div className="mt-3 pt-3 border-t border-neutral-100">
+                  <div className="flex items-center justify-center mb-2">
+                    {results.correct ? (
+                      <div className="flex items-center text-green-600">
+                        <CheckCircle size={20} className="mr-2" />
+                        <span className="text-base font-medium">Correct!</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center text-red-500">
+                        <XCircle size={20} className="mr-2" />
+                        <span className="text-base font-medium">Try Again</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {!results.correct && (
+                    <p className="text-sm text-neutral-600 mt-1">
+                      Try to include the character in your sentence
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       
-      {/* Word and Example Card */}
-      {currentWord ? (
-        <div className="w-full max-w-md bg-white rounded-xl shadow-md p-5">
-          <div className="text-center mb-4">
-            <h2 className="text-5xl font-bold mb-2">{currentWord.simplified}</h2>
-            <p className="text-lg text-gray-500 mb-1">{currentWord.pinyin}</p>
-            <p className="text-md text-gray-700">{currentWord.meanings}</p>
-          </div>
-          
-          {/* Example if available */}
-          {example && (
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-              <p className="text-sm font-medium text-gray-700 mb-2">Example Sentence:</p>
-              
-              {/* Show sentence with the target word highlighted */}
-              <div className="text-lg">
-                {example.chinese && example.chinese.split('').map((char, index) => (
-                  <span 
-                    key={index}
-                    className={char === currentWord.simplified ? 
-                      "text-blue-600 font-bold" : ""}
-                  >
-                    {char}
-                  </span>
-                ))}
-              </div>
-              
-              {/* Pinyin and English translation */}
-              {example.pinyin && <p className="text-sm text-gray-600 mt-2">{example.pinyin}</p>}
-              {example.english && <p className="text-sm text-gray-700 italic mt-1">{example.english}</p>}
-            </div>
-          )}
-          
-          {/* HSK Level Badge */}
-          {currentWord.level && (
-            <div className="mt-4 text-center">
-              <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-medium">
-                HSK {currentWord.level}
-              </span>
-            </div>
-          )}
-        </div>
-      ) : loading ? (
-        <div className="w-full max-w-md bg-white rounded-xl shadow-md p-5 text-center">
-          <div className="py-4 text-red-500">{error}</div>
-          <div className="flex space-x-2 justify-center">
-            <button 
-              onClick={requestNewWord}
-              className="mt-2 px-4 py-2 bg-blue-500 text-white rounded-lg"
-            >
-              Try Again
-            </button>
-            <button 
-              onClick={reconnectWebSocket}
-              className="mt-2 px-4 py-2 bg-gray-500 text-white rounded-lg"
-            >
-              Reconnect
-            </button>
-          </div>
-        </div>
-      ) : null}
-      
       {/* Audio Recorder */}
-      <AudioRecorder 
-        wsRef={wsRef} 
-        onTranscriptionStart={handleTranscriptionStart}
-        onTranscriptionComplete={handleTranscriptionComplete}
-        disabled={!currentWord || loading || !wsConnected}
-      />
+      <div className="mt-auto">
+        <AudioRecorder 
+          wsRef={wsRef} 
+          onTranscriptionStart={handleTranscriptionStart}
+          onTranscriptionComplete={handleTranscriptionComplete}
+          disabled={!currentWord || loading || !wsConnected}
+        />
+      </div>
       
-      {/* Transcription Result */}
-      {transcription && (
-        <div className="w-full max-w-md bg-white rounded-xl shadow-md p-5">
-          <div className="text-center mb-2">
-            <h3 className="text-lg font-medium">Your Pronunciation</h3>
-            <p className="text-lg bg-gray-50 p-3 rounded-lg mt-2">{transcription}</p>
-          </div>
-        </div>
-      )}
-      
-      {/* Results */}
-      {results && (
-        <div className="w-full max-w-md bg-white rounded-xl shadow-md p-5">
-          <div className="flex items-center justify-center mb-3">
-            {results.correct ? (
-              <div className="flex items-center text-green-600">
-                <CheckCircle size={24} className="mr-2" />
-                <span className="text-lg font-medium">Correct!</span>
-              </div>
-            ) : (
-              <div className="flex items-center text-red-600">
-                <XCircle size={24} className="mr-2" />
-                <span className="text-lg font-medium">Try Again</span>
-              </div>
-            )}
-          </div>
-          
-          {!results.correct && (
-            <div className="text-center text-sm text-gray-600 mt-2">
-              Say the character or a sentence containing the character
-            </div>
-          )}
-          
-          {/* Show next button for incorrect attempts */}
-          {!results.correct && (
-            <button
-              onClick={requestNewWord}
-              className="w-full mt-4 py-2 bg-blue-500 text-white rounded-lg"
-            >
-              Next Character
-            </button>
-          )}
-        </div>
-      )}
-      
-      {/* New Character Button */}
-      <button
-        onClick={requestNewWord}
-        disabled={loading}
-        className={`fixed right-4 bottom-20 p-4 rounded-full shadow-lg z-10 ${
-          loading
-            ? 'bg-gray-400 text-white' 
-            : 'bg-blue-500 text-white hover:bg-blue-600'
-        }`}
-      >
-        <RefreshCw size={24} />
-      </button>
+      {/* Next Character Button */}
+      <div className="mt-3 flex justify-center">
+        <button
+          onClick={requestNewWord}
+          disabled={loading}
+          className={`px-5 py-2.5 rounded-lg font-medium flex items-center justify-center ${
+            loading
+              ? 'bg-neutral-300 text-white' 
+              : 'bg-red-500 text-white hover:bg-red-600'
+          }`}
+        >
+          <RefreshCw size={18} className="mr-2" />
+          New Character
+        </button>
+      </div>
     </div>
   );
 }

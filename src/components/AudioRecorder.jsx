@@ -28,6 +28,7 @@ export default function AudioRecorder({
   const canvasRef = useRef(null);
   const animationFrameRef = useRef(null);
   const lastAudioLevelRef = useRef(0);
+  const audioInitializedRef = useRef(false);
   
   // Load settings from localStorage
   useEffect(() => {
@@ -66,12 +67,20 @@ export default function AudioRecorder({
     
     // Disconnect audio nodes
     if (sourceRef.current) {
-      sourceRef.current.disconnect();
+      try {
+        sourceRef.current.disconnect();
+      } catch (err) {
+        console.warn("Error disconnecting source:", err);
+      }
       sourceRef.current = null;
     }
     
     if (processorNodeRef.current) {
-      processorNodeRef.current.disconnect();
+      try {
+        processorNodeRef.current.disconnect();
+      } catch (err) {
+        console.warn("Error disconnecting processor:", err);
+      }
       processorNodeRef.current = null;
     }
     
@@ -82,6 +91,7 @@ export default function AudioRecorder({
     }
     
     setIsAudioReady(false);
+    audioInitializedRef.current = false;
   };
   
   // Clean up on unmount
@@ -90,39 +100,17 @@ export default function AudioRecorder({
       cleanupAudio();
       
       if (audioContextRef.current) {
-        audioContextRef.current.close().catch(err => 
-          console.error("Error closing AudioContext:", err)
-        );
+        try {
+          audioContextRef.current.close().catch(err => 
+            console.error("Error closing AudioContext:", err)
+          );
+        } catch (err) {
+          console.warn("Error closing audio context:", err);
+        }
         audioContextRef.current = null;
       }
     };
   }, []);
-  
-  // Initialize audio context when component mounts
-  useEffect(() => {
-    // Early initialization of AudioContext to reduce startup delay
-    if (!audioContextRef.current && !disabled) {
-      try {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
-          sampleRate: 16000 // Fixed sample rate for better compatibility
-        });
-        
-        // Pre-load audio worklet to reduce delay later
-        if (audioContextRef.current.audioWorklet) {
-          const baseUrl = import.meta.env.BASE_URL || '/';
-          audioContextRef.current.audioWorklet.addModule(`${baseUrl}mic-processor.js`)
-            .then(() => {
-              console.log("Audio worklet pre-loaded successfully");
-            })
-            .catch(err => {
-              console.error("Error pre-loading audio worklet:", err);
-            });
-        }
-      } catch (err) {
-        console.error("Error initializing audio context:", err);
-      }
-    }
-  }, [disabled]);
   
   // Set up key event listeners for space bar
   useEffect(() => {
@@ -162,31 +150,52 @@ export default function AudioRecorder({
       
       // Create audio context if needed
       if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
-          sampleRate: 16000 // Fixed sample rate for better compatibility
-        });
+        try {
+          audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
+            sampleRate: 16000 // Fixed sample rate for better compatibility
+          });
+        } catch (err) {
+          console.error("Failed to create AudioContext:", err);
+          throw new Error("Your browser doesn't support audio recording");
+        }
       }
       
       // Resume context if suspended (needed for iOS Safari)
       if (audioContextRef.current.state === "suspended") {
-        await audioContextRef.current.resume();
+        try {
+          await audioContextRef.current.resume();
+        } catch (err) {
+          console.error("Failed to resume AudioContext:", err);
+          throw new Error("Could not access audio - please try again");
+        }
       }
       
       // Request microphone access
       console.log("Requesting microphone access...");
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        } 
-      });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          } 
+        });
+      } catch (err) {
+        console.error("Microphone access failed:", err);
+        throw new Error("Microphone access denied or not available");
+      }
       
       console.log("Microphone access granted, setting up audio pipeline...");
       mediaStreamRef.current = stream;
       
       // Create audio processing pipeline
-      sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
+      try {
+        sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
+      } catch (err) {
+        console.error("Failed to create media stream source:", err);
+        throw new Error("Could not process audio input");
+      }
       
       // Set up audio worklet for processing
       try {
@@ -226,11 +235,6 @@ export default function AudioRecorder({
           
           setAudioLevel(smoothedLevel);
           
-          // Debug log
-          if (micBufferRef.current.length % 4000 === 0) {
-            console.log(`Recording: ${micBufferRef.current.length} samples captured, level: ${smoothedLevel.toFixed(2)}`);
-          }
-          
           // Update visualization if enabled
           if (showWaveform && canvasRef.current) {
             drawVisualization(smoothedLevel);
@@ -239,6 +243,7 @@ export default function AudioRecorder({
       };
       
       setIsAudioReady(true);
+      audioInitializedRef.current = true;
       setIsPreparingAudio(false);
       return true;
     } catch (err) {
@@ -256,7 +261,7 @@ export default function AudioRecorder({
     
     try {
       // First ensure the audio system is ready
-      if (!isAudioReady) {
+      if (!audioInitializedRef.current) {
         const prepared = await prepareAudioSystem();
         if (!prepared) return; // Exit if preparation failed
       }
@@ -268,8 +273,18 @@ export default function AudioRecorder({
       micBufferRef.current = [];
       
       // Connect the audio nodes - this actually starts the audio flow
-      sourceRef.current.connect(processorNodeRef.current);
-      console.log("Audio pipeline connected successfully");
+      // Make sure nodes exist before connecting
+      if (!sourceRef.current || !processorNodeRef.current) {
+        throw new Error("Audio system not properly initialized");
+      }
+      
+      try {
+        sourceRef.current.connect(processorNodeRef.current);
+        console.log("Audio pipeline connected successfully");
+      } catch (err) {
+        console.error("Failed to connect audio nodes:", err);
+        throw new Error("Audio recording failed to start");
+      }
       
       // Update UI state - important to set the ref first
       isRecordingRef.current = true;
@@ -352,10 +367,10 @@ export default function AudioRecorder({
       const x = i * (barWidth + 2) + 1;
       const y = (height - barHeight) / 2;
       
-      // Use blue color gradient
+      // Use red color gradient (updated for new theme)
       const gradient = ctx.createLinearGradient(0, y, 0, y + barHeight);
-      gradient.addColorStop(0, "#93c5fd");
-      gradient.addColorStop(1, "#3b82f6");
+      gradient.addColorStop(0, "#fecaca"); // light red
+      gradient.addColorStop(1, "#ef4444"); // red-500
       ctx.fillStyle = gradient;
       
       // Draw bar with rounded corners
@@ -418,11 +433,41 @@ export default function AudioRecorder({
     }
   };
 
+  // Function that creates the AudioContext on user interaction
+  const initializeAudioOnUserGesture = () => {
+    if (!audioContextRef.current) {
+      try {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: 16000
+        });
+        console.log("AudioContext created on user gesture");
+        
+        // Pre-load audio worklet
+        if (audioContextRef.current.audioWorklet) {
+          const baseUrl = import.meta.env.BASE_URL || '/';
+          audioContextRef.current.audioWorklet.addModule(`${baseUrl}mic-processor.js`)
+            .then(() => {
+              console.log("Audio worklet pre-loaded successfully");
+            })
+            .catch(err => {
+              console.warn("Error pre-loading audio worklet:", err);
+            });
+        }
+      } catch (err) {
+        console.error("Failed to create AudioContext:", err);
+      }
+    } else if (audioContextRef.current.state === "suspended") {
+      audioContextRef.current.resume().catch(err => {
+        console.warn("Failed to resume AudioContext:", err);
+      });
+    }
+  };
+
   return (
     <div className="w-full max-w-sm mx-auto">
-      <div className={`flex flex-col items-center justify-center p-4 space-y-4 border border-gray-200 rounded-xl shadow-sm transition-colors ${
-        isRecording ? "bg-blue-50 border-blue-200" : "bg-white"
-      } ${isSending ? "bg-gray-50 border-gray-300" : ""}`}>
+      <div className={`flex flex-col items-center justify-center p-4 space-y-4 border border-neutral-100 rounded-xl shadow-sm transition-colors ${
+        isRecording ? "bg-red-50 border-red-200" : "bg-white"
+      } ${isSending ? "bg-neutral-50 border-neutral-200" : ""}`}>
         
         {/* Error display */}
         {error && (
@@ -447,7 +492,7 @@ export default function AudioRecorder({
                 <div
                   key={i}
                   className={`w-1 rounded-full transition-all duration-150 ${
-                    audioLevel > i * 0.2 ? "bg-blue-500" : "bg-gray-300"
+                    audioLevel > i * 0.2 ? "bg-red-500" : "bg-neutral-300"
                   }`}
                   style={{ 
                     height: `${Math.min(16, 8 + i * 2)}px`,
@@ -462,14 +507,14 @@ export default function AudioRecorder({
         {/* Status indicator */}
         <div className="text-center">
           {isPreparingAudio && (
-            <p className="text-sm text-gray-600">Preparing microphone...</p>
+            <p className="text-sm text-neutral-600">Preparing microphone...</p>
           )}
           {isRecording ? (
-            <p className="text-sm text-blue-600 animate-pulse">Recording... {useHoldToSpeak ? "Release to stop" : "Tap to stop"}</p>
+            <p className="text-sm text-red-600 animate-pulse">Recording... {useHoldToSpeak ? "Release to stop" : "Tap to stop"}</p>
           ) : isSending ? (
-            <p className="text-sm text-gray-600">Processing audio...</p>
+            <p className="text-sm text-neutral-600">Processing audio...</p>
           ) : (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-neutral-500">
               {useHoldToSpeak
                 ? "Hold SPACE or press and hold the microphone to record"
                 : "Tap the microphone to start recording"}
@@ -478,11 +523,12 @@ export default function AudioRecorder({
         </div>
         
         {/* Recording Mode Toggle */}
-        <div className="flex items-center text-xs text-gray-500">
-          <span className={useHoldToSpeak ? "text-gray-400" : "text-blue-600"}>Tap</span>
+        <div className="flex items-center text-xs text-neutral-500">
+          <span className={useHoldToSpeak ? "text-neutral-400" : "text-red-600"}>Tap</span>
           <button
             onClick={toggleRecordingMode}
-            className="mx-2 relative inline-flex items-center h-4 rounded-full w-8 transition-colors ease-in-out duration-200 focus:outline-none bg-gray-200"
+            onMouseDown={initializeAudioOnUserGesture}
+            className="mx-2 relative inline-flex items-center h-4 rounded-full w-8 transition-colors ease-in-out duration-200 focus:outline-none bg-neutral-200"
             disabled={isRecording || isSending}
           >
             <span 
@@ -491,14 +537,20 @@ export default function AudioRecorder({
               }`}
             />
           </button>
-          <span className={useHoldToSpeak ? "text-blue-600" : "text-gray-400"}>Hold</span>
+          <span className={useHoldToSpeak ? "text-red-600" : "text-neutral-400"}>Hold</span>
         </div>
         
         {/* Main recording button */}
         {useHoldToSpeak ? (
           <button
-            onTouchStart={() => !disabled && prepareAudioSystem().then(ready => { if (ready) startRecording(); })}
-            onMouseDown={() => !disabled && prepareAudioSystem().then(ready => { if (ready) startRecording(); })}
+            onTouchStart={() => {
+              initializeAudioOnUserGesture();
+              if (!disabled) prepareAudioSystem().then(ready => { if (ready) startRecording(); });
+            }}
+            onMouseDown={() => {
+              initializeAudioOnUserGesture();
+              if (!disabled) prepareAudioSystem().then(ready => { if (ready) startRecording(); });
+            }}
             onTouchEnd={() => !disabled && isRecording && stopRecording()}
             onMouseUp={() => !disabled && isRecording && stopRecording()}
             onMouseLeave={() => !disabled && isRecording && stopRecording()}
@@ -507,10 +559,10 @@ export default function AudioRecorder({
               isRecording
                 ? "bg-red-500 scale-110"
                 : isPreparingAudio
-                ? "bg-yellow-500"
+                ? "bg-amber-500"
                 : isSending
-                ? "bg-gray-400"
-                : "bg-blue-500 hover:bg-blue-600"
+                ? "bg-neutral-400"
+                : "bg-red-500 hover:bg-red-600"
             } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
             style={{ 
               WebkitTouchCallout: "none",
@@ -526,6 +578,7 @@ export default function AudioRecorder({
         ) : (
           <button
             onClick={() => {
+              initializeAudioOnUserGesture();
               if (disabled) return;
               if (isRecording) {
                 stopRecording();
@@ -540,10 +593,10 @@ export default function AudioRecorder({
               isRecording
                 ? "bg-red-500 scale-110"
                 : isPreparingAudio
-                ? "bg-yellow-500"
+                ? "bg-amber-500"
                 : isSending
-                ? "bg-gray-400"
-                : "bg-blue-500 hover:bg-blue-600"
+                ? "bg-neutral-400"
+                : "bg-red-500 hover:bg-red-600"
             } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
             style={{ 
               WebkitTouchCallout: "none",

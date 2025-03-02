@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import { Mic, BarChart2, BookOpen, Settings } from "lucide-react";
+import { Mic, BookOpen, BarChart2, Settings, WifiOff } from "lucide-react";
 import PracticePage from "./pages/PracticePage";
 import OfflinePracticePage from "./pages/OfflinePracticePage";
 import VocabularyPage from "./pages/VocabularyPage";
@@ -83,25 +83,21 @@ function App() {
     if (wsRef.current && wsRef.current.readyState !== WebSocket.CONNECTING) {
       console.log("Actively reconnecting WebSocket...");
       
-      // Close the existing connection if it's not already closed
       if (wsRef.current.readyState !== WebSocket.CLOSED) {
         wsRef.current.close();
       }
       
-      // Create a new connection
       connect();
     }
   }, [connect]);
 
   // Set up WebSocket connection
   useEffect(() => {
-    // Only connect to WebSocket if not preferring offline practice
     if (preferOfflinePractice) {
       console.log("Using offline practice mode, not connecting to WebSocket");
       return;
     }
     
-    // Check if we're online
     if (!navigator.onLine) {
       setOfflineMode(true);
       setStatus("offline");
@@ -110,18 +106,14 @@ function App() {
 
     connect();
 
-    // Handle going offline
     const handleOffline = () => {
       setOfflineMode(true);
       setStatus("offline");
       setWsConnected(false);
     };
 
-    // Handle coming back online
     const handleOnline = () => {
-      // Only try to reconnect if we were previously offline
       if (offlineMode && !preferOfflinePractice) {
-        // Wait a bit to make sure network is stable
         setTimeout(() => {
           connect();
           setStatus("connecting");
@@ -129,7 +121,6 @@ function App() {
       }
     };
 
-    // Handle visibility change to reconnect when tab becomes active
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && navigator.onLine && 
           (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) && 
@@ -180,12 +171,12 @@ function App() {
         return (preferOfflinePractice || (offlineMode && !wsConnected)) ? (
           <OfflinePracticePage />
         ) : (
-          <PracticePage 
-            wsRef={wsRef} 
-            offlineMode={offlineMode} 
-            wsConnected={wsConnected}
-            reconnectWebSocket={reconnectWebSocket}
-          />
+        <PracticePage 
+          wsRef={wsRef} 
+          offlineMode={offlineMode} 
+          wsConnected={wsConnected}
+          reconnectWebSocket={reconnectWebSocket}
+        />
         );
       case 'vocabulary':
         return <VocabularyPage />;
@@ -202,31 +193,27 @@ function App() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-100 text-gray-900">
+    <div className="h-full flex flex-col bg-neutral-50 text-neutral-900">
       {/* Status bar for offline mode */}
       {offlineMode && !preferOfflinePractice && (
-        <div className="bg-yellow-500 text-white text-center text-sm py-1 px-4 safe-left safe-right">
-          You're currently offline. Limited features available.
+        <div className="bg-amber-500 text-white text-center text-xs py-1 px-4 safe-left safe-right">
+          <div className="flex items-center justify-center">
+            <WifiOff size={12} className="mr-1" />
+            <span>You're currently offline. Limited features available.</span>
+          </div>
         </div>
       )}
       
       {/* Show offline practice notice */}
       {preferOfflinePractice && activeTab === 'practice' && (
-        <div className="bg-blue-500 text-white text-center text-sm py-1 px-4 safe-left safe-right">
+        <div className="bg-red-500 text-white text-center text-xs py-1 px-4 safe-left safe-right">
           Offline Practice Mode: Character Recognition
         </div>
       )}
       
-      {/* Connection status indicator for debugging */}
-      {status !== "connected" && !offlineMode && !preferOfflinePractice && (
-        <div className="bg-blue-100 text-blue-800 text-center text-sm py-1 px-4 safe-left safe-right">
-          Connection status: {status}
-        </div>
-      )}
-      
       {/* App Header - Optimized for iPhone notch with safe area */}
-      <header className="bg-white shadow-sm py-4 px-4 safe-top safe-left safe-right">
-        <h1 className="text-xl font-bold text-center">HSK Master</h1>
+      <header className="bg-white py-4 px-4 safe-top safe-left safe-right border-b border-neutral-100">
+        <h1 className="text-xl font-bold text-center text-neutral-900">HSK Master</h1>
       </header>
       
       {/* Main Content Area */}
@@ -235,11 +222,11 @@ function App() {
       </main>
       
       {/* Bottom Navigation - with safe areas for iPhone */}
-      <nav className="fixed bottom-0 w-full bg-white shadow-lg safe-bottom-nav">
+      <nav className="fixed bottom-0 w-full bg-white border-t border-neutral-100 safe-bottom-nav">
         <div className="flex justify-around safe-left safe-right">
           <button 
             onClick={() => setActiveTab('practice')}
-            className={`p-3 flex flex-col items-center ${activeTab === 'practice' ? 'text-blue-500' : 'text-gray-500'}`}
+            className={`p-2 flex flex-col items-center ${activeTab === 'practice' ? 'text-red-500' : 'text-neutral-400'}`}
           >
             <Mic size={24} />
             <span className="text-xs mt-1">Practice</span>
@@ -247,7 +234,7 @@ function App() {
           
           <button 
             onClick={() => setActiveTab('vocabulary')}
-            className={`p-3 flex flex-col items-center ${activeTab === 'vocabulary' ? 'text-blue-500' : 'text-gray-500'}`}
+            className={`p-2 flex flex-col items-center ${activeTab === 'vocabulary' ? 'text-red-500' : 'text-neutral-400'}`}
           >
             <BookOpen size={24} />
             <span className="text-xs mt-1">Words</span>
@@ -255,7 +242,7 @@ function App() {
           
           <button 
             onClick={() => setActiveTab('progress')}
-            className={`p-3 flex flex-col items-center ${activeTab === 'progress' ? 'text-blue-500' : 'text-gray-500'}`}
+            className={`p-2 flex flex-col items-center ${activeTab === 'progress' ? 'text-red-500' : 'text-neutral-400'}`}
           >
             <BarChart2 size={24} />
             <span className="text-xs mt-1">Progress</span>
@@ -263,7 +250,7 @@ function App() {
           
           <button 
             onClick={() => setActiveTab('settings')}
-            className={`p-3 flex flex-col items-center ${activeTab === 'settings' ? 'text-blue-500' : 'text-gray-500'}`}
+            className={`p-2 flex flex-col items-center ${activeTab === 'settings' ? 'text-red-500' : 'text-neutral-400'}`}
           >
             <Settings size={24} />
             <span className="text-xs mt-1">Settings</span>

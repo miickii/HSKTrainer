@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircleIcon } from "lucide-react";
+import { CheckCircle, RefreshCw } from "lucide-react";
 import { vocabularyDB } from "../services/db";
 
 export default function ProgressPage() {
@@ -75,32 +75,32 @@ export default function ProgressPage() {
     <div className="p-4 pb-16">
       {loading ? (
         <div className="flex justify-center items-center py-10">
-          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-red-500"></div>
         </div>
       ) : (
         <>
           {/* Overall Progress Card */}
-          <div className="card bg-white rounded-xl shadow-md p-4 mb-6">
+          <div className="bg-white rounded-xl shadow-sm border border-neutral-100 p-4 mb-5">
             <div className="flex items-center mb-3">
-              <CheckCircleIcon size={18} className="text-blue-500 mr-2" />
-              <h2 className="text-lg font-medium">Overall Progress</h2>
+              <CheckCircle size={18} className="text-red-500 mr-2" />
+              <h2 className="text-lg font-medium text-neutral-900">Overall Progress</h2>
             </div>
             
             <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600">Total Words Mastered:</span>
-              <span className="font-bold">{stats.masteredWords} / {stats.totalWords}</span>
+              <span className="text-neutral-600">Words Mastered:</span>
+              <span className="font-bold text-neutral-800">{stats.masteredWords} / {stats.totalWords}</span>
             </div>
             
-            <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+            <div className="w-full bg-neutral-100 rounded-full h-2.5 mb-1">
               <div 
-                className="bg-blue-600 h-2.5 rounded-full" 
+                className="bg-red-500 h-2.5 rounded-full" 
                 style={{ 
                   width: `${stats.totalWords > 0 ? (stats.masteredWords / stats.totalWords) * 100 : 0}%` 
                 }}
               ></div>
             </div>
             
-            <div className="text-right text-sm text-gray-500">
+            <div className="text-right text-sm text-neutral-500">
               {stats.totalWords > 0 
                 ? Math.round((stats.masteredWords / stats.totalWords) * 100) 
                 : 0}% complete
@@ -108,21 +108,21 @@ export default function ProgressPage() {
           </div>
           
           {/* HSK Level Progress */}
-          <div className="card bg-white rounded-xl shadow-md p-4">
-            <h2 className="text-lg font-medium mb-4">HSK Level Progress</h2>
+          <div className="bg-white rounded-xl shadow-sm border border-neutral-100 p-4 mb-5">
+            <h2 className="text-lg font-medium mb-4 text-neutral-900">HSK Level Progress</h2>
             
             <div className="space-y-4">
               {stats.masteredByLevel.map(level => (
                 <div key={level.level} className="mb-3">
                   <div className="flex justify-between mb-1">
-                    <span className="font-medium">HSK {level.level}</span>
-                    <span className="text-gray-600">
+                    <span className="font-medium text-neutral-800">HSK {level.level}</span>
+                    <span className="text-neutral-600">
                       {level.mastered} / {level.total} ({level.percentage}%)
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div className="w-full bg-neutral-100 rounded-full h-2.5">
                     <div 
-                      className="bg-blue-600 h-2.5 rounded-full" 
+                      className="bg-red-500 h-2.5 rounded-full" 
                       style={{ width: `${level.percentage}%` }}
                     ></div>
                   </div>
@@ -131,16 +131,49 @@ export default function ProgressPage() {
             </div>
           </div>
           
-          {/* Sync Status */}
-          <div className="mt-6 p-4 bg-white rounded-xl shadow-md">
-            <div className="text-center">
-              <button 
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg"
-              >
-                Refresh Progress Data
-              </button>
+          {/* Learning Streak */}
+          <div className="bg-white rounded-xl shadow-sm border border-neutral-100 p-4 mb-5">
+            <h2 className="text-lg font-medium mb-3 text-neutral-900">Learning Activity</h2>
+            
+            <div className="flex justify-between items-center">
+              <div className="text-center px-3 py-2">
+                <div className="text-2xl font-bold text-neutral-900">
+                  {stats.masteredWords}
+                </div>
+                <div className="text-xs text-neutral-500">
+                  Words Mastered
+                </div>
+              </div>
+              
+              <div className="text-center px-3 py-2">
+                <div className="text-2xl font-bold text-neutral-900">
+                  {stats.totalWords - stats.masteredWords}
+                </div>
+                <div className="text-xs text-neutral-500">
+                  Still Learning
+                </div>
+              </div>
+              
+              <div className="text-center px-3 py-2">
+                <div className="text-2xl font-bold text-neutral-900">
+                  {stats.totalWords}
+                </div>
+                <div className="text-xs text-neutral-500">
+                  Total Words
+                </div>
+              </div>
             </div>
+          </div>
+          
+          {/* Refresh Button */}
+          <div className="mt-6 text-center">
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-neutral-100 text-neutral-700 rounded-lg font-medium"
+            >
+              <RefreshCw size={16} className="inline-block mr-2" />
+              Refresh Progress Data
+            </button>
           </div>
         </>
       )}
