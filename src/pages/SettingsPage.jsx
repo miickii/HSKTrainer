@@ -2,39 +2,38 @@ import React, { useState, useEffect } from "react";
 import { 
   Mic, 
   Database, 
-  Sun, 
-  Moon,
-  ChevronRight,
-  Download,
-  CloudOff,
-  BookOpen,
+  ArrowDownToLine,
+  ArrowUpFromLine,
   Wifi,
+  WifiOff,
+  RefreshCw,
   Info,
-  Check,
   AlertCircle,
-  Server
+  Server,
+  Trash2
 } from "lucide-react";
-import { settingsDB } from "../services/db";
-import { SyncService } from "../services/sync-service";
+import { vocabularyDB } from "../services/db";
+import { ENDPOINTS } from "../services/api";
 
-export default function SettingsPage({ status, offlineMode, onSyncRequest, syncing, syncStatus }) {
+export default function SettingsPage({ status, offlineMode }) {
   const [settings, setSettings] = useState({
     useHoldToSpeak: true,
     showWaveform: true,
     sensitivity: 1.5,
-    autoSendDelay: 1000,
     hskFocus: [1, 2, 3],
-    theme: 'light',
-    dailyGoal: 10,
-    notifications: true,
-    darkMode: false
+    preferOfflinePractice: false,
+    preInitializeAudio: true
   });
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showHSKSelect, setShowHSKSelect] = useState(false);
-  const [appVersion, setAppVersion] = useState('1.0.0');
+  const [appVersion, setAppVersion] = useState('1.2.0');
   const [storageUsage, setStorageUsage] = useState(null);
+  const [dataStats, setDataStats] = useState({
+    wordCount: 0,
+    sentenceCount: 0
+  });
   
   // Server connection settings
   const [serverBaseUrl, setServerBaseUrl] = useState(() => {
@@ -47,77 +46,30 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
     return 'localhost:8000'; // Default value
   });
   
-  // Handle sync if onSyncRequest is not provided
-  const handleSyncRequest = () => {
-    if (onSyncRequest) {
-      onSyncRequest();
-    } else {
-      // Fallback implementation if onSyncRequest prop was not provided
-      syncData();
-    }
-  };
-  
-  // Fallback sync implementation
-  const syncData = async () => {
-    if (offlineMode) return;
-    
-    try {
-      setSaving(true);
-      await SyncService.downloadFullDatabase();
-      alert("Vocabulary data synchronized successfully");
-    } catch (error) {
-      console.error("Error syncing vocabulary:", error);
-      alert(`Failed to sync: ${error.message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-  
-  // Save server URLs
-  const saveServerUrls = () => {
-    // Save both URLs
-    const baseUrl = serverBaseUrl.trim();
-    localStorage.setItem('serverUrl', `https://${baseUrl}`);
-    localStorage.setItem('wsUrl', `wss://${baseUrl}/ws/api`);
-    
-    // Set flag to trigger sync after reload
-    localStorage.setItem('needsSync', 'true');
-    
-    // Show instruction modal or alert
-    if (baseUrl.includes('ngrok-free.app')) {
-      // Check if this is an ngrok URL
-      const confirmMessage = 
-        "Important: You're using an ngrok URL.\n\n" +
-        "1. Please open this URL in a new tab first: https://" + baseUrl + "\n" +
-        "2. Click 'Visit Site' on the ngrok warning page\n" +
-        "3. Then come back and click OK to reload the app\n\n" +
-        "This step is necessary for the app to work correctly.";
-      
-      if (window.confirm(confirmMessage)) {
-        // Reload the page to apply changes
-        window.location.reload();
-      }
-    } else {
-      // Not an ngrok URL, proceed normally
-      alert('Server URLs updated. The app will now reload to apply changes.');
-      window.location.reload();
-    }
-  };
-  
-  // Load settings
+  // Load app statistics
   useEffect(() => {
-    async function loadSettings() {
+    const loadStats = async () => {
       try {
-        setLoading(true);
+        // Get word count
+        const words = await vocabularyDB.getAll();
         
-        // Get all settings
-        const savedSettings = await settingsDB.getAllSettings();
+        // Count sentences
+        let sentenceCount = 0;
+        words.forEach(word => {
+          try {
+            const examples = JSON.parse(word.examples || '[]');
+            if (Array.isArray(examples)) {
+              sentenceCount += examples.length;
+            }
+          } catch (error) {
+            // Ignore parsing errors
+          }
+        });
         
-        // Merge with default settings
-        setSettings(prev => ({
-          ...prev,
-          ...savedSettings
-        }));
+        setDataStats({
+          wordCount: words.length,
+          sentenceCount: sentenceCount
+        });
         
         // Estimate storage usage
         if (navigator.storage && navigator.storage.estimate) {
@@ -133,12 +85,36 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
           });
         }
         
+      } catch (error) {
+        console.error("Error loading stats:", error);
+      }
+    };
+    
+    loadStats();
+  }, []);
+  
+  // Load settings
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        setLoading(true);
+        
+        // Try to load from localStorage first (for settings that need to be quickly accessible)
+        const appSettings = localStorage.getItem('appSettings');
+        if (appSettings) {
+          const parsedSettings = JSON.parse(appSettings);
+          setSettings(prev => ({
+            ...prev,
+            ...parsedSettings
+          }));
+        }
+        
         setLoading(false);
       } catch (error) {
         console.error("Error loading settings:", error);
         setLoading(false);
       }
-    }
+    };
     
     loadSettings();
   }, []);
@@ -148,14 +124,20 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
     try {
       setSaving(true);
       
-      // Save to IndexedDB
-      await settingsDB.saveSetting(key, value);
-      
       // Update local state
       setSettings(prev => ({
         ...prev,
         [key]: value
       }));
+      
+      // Save to localStorage for quick access
+      try {
+        const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{}');
+        appSettings[key] = value;
+        localStorage.setItem('appSettings', JSON.stringify(appSettings));
+      } catch (error) {
+        console.error("Error saving to localStorage:", error);
+      }
       
       setSaving(false);
     } catch (error) {
@@ -214,46 +196,173 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
     }
   };
 
-  const resetAllWords = async () => {
-    if (window.confirm("Are you sure you want to reset all words? This will clear all learning progress and set all words back to 'Learning' status.")) {
+  // Reset all progress
+  const resetAllProgress = async () => {
+    if (window.confirm("Are you sure you want to reset all learning progress? This will set all words back to beginning level.")) {
       try {
-        // Show loading state
         setSaving(true);
         
-        // Get the current server URL
-        const apiUrl = localStorage.getItem('serverUrl') || import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        // Reset progress in local database
+        const count = await vocabularyDB.resetAllProgress();
         
-        // Call the reset API
-        const response = await fetch(`${apiUrl}/api/reset-all-words`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        
-        // Show success message
-        alert(`Successfully reset ${data.count} words to Learning status.`);
-        
-        // Clear local IndexedDB cache to sync with server
-        if (window.confirm("Would you like to sync your local database with the server to apply the reset?")) {
-          // This will trigger a sync on the next app reload
-          localStorage.setItem('needsSync', 'true');
-          alert("Changes will be applied after syncing with the server. The app will now reload.");
-          window.location.reload();
-        }
-        
+        alert(`Successfully reset ${count} words to initial learning status.`);
       } catch (error) {
-        console.error("Error resetting words:", error);
-        alert(`Failed to reset words: ${error.message}`);
+        console.error("Error resetting progress:", error);
+        alert(`Failed to reset progress: ${error.message}`);
       } finally {
         setSaving(false);
       }
+    }
+  };
+  
+  // Export SRS progress
+  const exportSRSProgress = async () => {
+    try {
+      setSaving(true);
+      
+      // Get progress data
+      const progressData = await vocabularyDB.exportProgress();
+      
+      // Create a download link
+      const dataStr = JSON.stringify(progressData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      
+      // Create a link and click it to download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `hsk-progress-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+      
+      setSaving(false);
+    } catch (error) {
+      console.error("Error exporting progress:", error);
+      alert(`Failed to export progress: ${error.message}`);
+      setSaving(false);
+    }
+  };
+  
+  // Import SRS progress from a file
+  const importSRSProgress = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    try {
+      setSaving(true);
+      
+      // Read the file
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        try {
+          const progressData = JSON.parse(e.target.result);
+          
+          // Validate format
+          if (!progressData || !progressData.progressData || !Array.isArray(progressData.progressData)) {
+            throw new Error("Invalid progress data format");
+          }
+          
+          // Import the progress
+          const count = await vocabularyDB.importProgress(progressData);
+          
+          alert(`Successfully imported progress for ${count} words.`);
+          setSaving(false);
+        } catch (error) {
+          console.error("Error parsing progress file:", error);
+          alert(`Failed to import progress: ${error.message}`);
+          setSaving(false);
+        }
+      };
+      
+      reader.onerror = () => {
+        alert("Error reading file");
+        setSaving(false);
+      };
+      
+      reader.readAsText(file);
+    } catch (error) {
+      console.error("Error importing progress:", error);
+      alert(`Failed to import progress: ${error.message}`);
+      setSaving(false);
+    }
+  };
+  
+  // Import full database from server
+  const importFullDatabase = async () => {
+    if (window.confirm("This will download the entire vocabulary database from the server and replace your local copy. Your learning progress will be reset. Continue?")) {
+      try {
+        setSaving(true);
+        
+        // Fetch vocabulary from server
+        const vocabResponse = await fetch(ENDPOINTS.vocabulary, {
+          headers: {
+            'ngrok-skip-browser-warning': 'true'
+          }
+        });
+        
+        if (!vocabResponse.ok) {
+          throw new Error(`Server returned ${vocabResponse.status}: ${vocabResponse.statusText}`);
+        }
+        
+        const vocabulary = await vocabResponse.json();
+        
+        if (!Array.isArray(vocabulary) || vocabulary.length === 0) {
+          throw new Error("Server returned empty or invalid vocabulary data");
+        }
+        
+        // Import vocabulary
+        const wordCount = await vocabularyDB.importFromServer(vocabulary);
+        
+        // Update stats
+        setDataStats({
+          wordCount
+        });
+        
+        // Save import timestamp
+        localStorage.setItem('lastDatabaseImport', new Date().toISOString());
+        
+        alert(`Successfully imported ${wordCount} words.`);
+      } catch (error) {
+        console.error("Error importing database:", error);
+        alert(`Failed to import database: ${error.message}`);
+      } finally {
+        setSaving(false);
+      }
+    }
+  };
+  
+  // Save server URLs
+  const saveServerUrls = () => {
+    // Save both URLs
+    const baseUrl = serverBaseUrl.trim();
+    localStorage.setItem('serverUrl', `https://${baseUrl}`);
+    localStorage.setItem('wsUrl', `wss://${baseUrl}/ws/api`);
+    
+    // Show instruction modal or alert
+    if (baseUrl.includes('ngrok-free.app')) {
+      // Check if this is an ngrok URL
+      const confirmMessage = 
+        "Important: You're using an ngrok URL.\n\n" +
+        "1. Please open this URL in a new tab first: https://" + baseUrl + "\n" +
+        "2. Click 'Visit Site' on the ngrok warning page\n" +
+        "3. Then come back and click OK to reload the app\n\n" +
+        "This step is necessary for the app to work correctly.";
+      
+      if (window.confirm(confirmMessage)) {
+        // Reload the page to apply changes
+        window.location.reload();
+      }
+    } else {
+      // Not an ngrok URL, proceed normally
+      alert('Server URLs updated. The app will now reload to apply changes.');
+      window.location.reload();
     }
   };
 
@@ -270,7 +379,7 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
             <div className="p-4 flex items-center justify-between">
               <div className="flex items-center">
                 {offlineMode ? (
-                  <CloudOff size={20} className="text-orange-500 mr-2" />
+                  <WifiOff size={20} className="text-orange-500 mr-2" />
                 ) : (
                   <Wifi size={20} className="text-green-500 mr-2" />
                 )}
@@ -338,7 +447,7 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
               {/* Preview of URLs that will be used */}
               <div className="text-xs text-gray-600 space-y-1 bg-gray-50 p-2 rounded">
                 <div><strong>API URL:</strong> https://{serverBaseUrl}</div>
-                <div><strong>WebSocket URL:</strong> wss://{serverBaseUrl}</div>
+                <div><strong>WebSocket URL:</strong> wss://{serverBaseUrl}/ws/api</div>
               </div>
               
               {/* Save Button */}
@@ -400,6 +509,24 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
                 </label>
               </div>
               
+              {/* Pre-initialize Audio Toggle */}
+              <div className="p-4 flex justify-between items-center">
+                <div>
+                  <div className="font-medium">Pre-initialize Audio</div>
+                  <div className="text-sm text-gray-500">Reduces recording startup delay</div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer"
+                    checked={settings.preInitializeAudio}
+                    onChange={() => toggleSetting('preInitializeAudio')}
+                    disabled={saving}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+              
               {/* Microphone Sensitivity */}
               <div className="p-4">
                 <div className="mb-2">
@@ -421,6 +548,24 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
                   <span className="text-sm text-gray-500 ml-2">High</span>
                 </div>
               </div>
+              
+              {/* Prefer Offline Practice Toggle */}
+              <div className="p-4 flex justify-between items-center">
+                <div>
+                  <div className="font-medium">Prefer Offline Practice Mode</div>
+                  <div className="text-sm text-gray-500">Focus on character recognition instead of pronunciation</div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer"
+                    checked={settings.preferOfflinePractice}
+                    onChange={() => toggleSetting('preferOfflinePractice')}
+                    disabled={saving}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
             </div>
           </div>
           
@@ -428,7 +573,7 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
           <div className="bg-white rounded-xl shadow-md">
             <div className="p-4 border-b">
               <div className="flex items-center">
-                <BookOpen size={18} className="text-blue-500 mr-2" />
+                <Database size={18} className="text-blue-500 mr-2" />
                 <h2 className="text-lg font-medium">Learning Settings</h2>
               </div>
             </div>
@@ -445,7 +590,7 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
                 </div>
                 <div className="flex items-center">
                   <span className="text-sm text-gray-500 mr-2">{formatHSKFocus()}</span>
-                  <ChevronRight size={18} className="text-gray-400" />
+                  <RefreshCw size={18} className="text-gray-400" />
                 </div>
               </div>
               
@@ -470,73 +615,6 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
                   </div>
                 </div>
               )}
-              
-              {/* Daily Goal */}
-              <div className="p-4 flex justify-between items-center">
-                <div>
-                  <div className="font-medium">Daily Goal</div>
-                  <div className="text-sm text-gray-500">Words to learn each day</div>
-                </div>
-                <div className="flex items-center">
-                  <select
-                    value={settings.dailyGoal}
-                    onChange={(e) => saveSetting('dailyGoal', parseInt(e.target.value))}
-                    className="bg-gray-100 border border-gray-300 text-gray-700 rounded-lg px-2 py-1 focus:ring-blue-500 focus:border-blue-500"
-                    disabled={saving}
-                  >
-                    <option value="5">5 words</option>
-                    <option value="10">10 words</option>
-                    <option value="15">15 words</option>
-                    <option value="20">20 words</option>
-                    <option value="30">30 words</option>
-                  </select>
-                </div>
-              </div>
-              
-              {/* Notifications */}
-              <div className="p-4 flex justify-between items-center">
-                <div>
-                  <div className="font-medium">Notifications</div>
-                  <div className="text-sm text-gray-500">Remind me to practice</div>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    className="sr-only peer"
-                    checked={settings.notifications}
-                    onChange={() => toggleSetting('notifications')}
-                    disabled={saving}
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
-              </div>
-              
-              {/* Dark Mode */}
-              <div className="p-4 flex justify-between items-center">
-                <div>
-                  <div className="font-medium">Dark Mode</div>
-                  <div className="text-sm text-gray-500">Enable dark theme</div>
-                </div>
-                <div className="flex items-center">
-                  <span className="mr-2">
-                    {settings.darkMode ? (
-                      <Moon size={18} className="text-gray-500" />
-                    ) : (
-                      <Sun size={18} className="text-gray-500" />
-                    )}
-                  </span>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer"
-                      checked={settings.darkMode}
-                      onChange={() => toggleSetting('darkMode')}
-                      disabled={saving}
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  </label>
-                </div>
-              </div>
             </div>
           </div>
           
@@ -568,45 +646,121 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
                 </div>
               )}
               
-              {/* Sync Data */}
-              <div className="p-4 flex justify-between items-center">
-                <div>
-                  <div className="font-medium">Sync Vocabulary Data</div>
-                  <div className="text-sm text-gray-500">Update from server</div>
-                  
-                  {/* Show sync status if available */}
-                  {syncStatus && (
-                    <div className={`mt-2 text-sm flex items-center ${
-                      syncStatus.success ? "text-green-600" : "text-red-600"
-                    }`}>
-                      {syncStatus.success ? 
-                        <Check size={14} className="mr-1" /> : 
-                        <AlertCircle size={14} className="mr-1" />
-                      }
-                      {syncStatus.message}
-                    </div>
-                  )}
-                  
-                  {/* Show last sync time */}
-                  <div className="mt-1 text-xs text-gray-500">
-                    Last sync: {localStorage.getItem('lastSync') ? 
-                      new Date(localStorage.getItem('lastSync')).toLocaleString() : 
-                      'Never'}
+              {/* Database Stats */}
+              <div className="p-4">
+                <div className="text-sm font-medium mb-2">Database Statistics</div>
+                <div className="flex flex-col space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Vocabulary words:</span>
+                    <span className="text-sm font-medium">{dataStats.wordCount}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Example sentences:</span>
+                    <span className="text-sm font-medium">{dataStats.sentenceCount}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Last import:</span>
+                    <span className="text-sm font-medium">
+                      {localStorage.getItem('lastDatabaseImport') 
+                        ? new Date(localStorage.getItem('lastDatabaseImport')).toLocaleString() 
+                        : 'Never'}
+                    </span>
                   </div>
                 </div>
-                <button 
-                  onClick={handleSyncRequest}
-                  disabled={syncing || offlineMode}
-                  className={`flex items-center px-3 py-1.5 rounded-lg text-sm font-medium ${
-                    syncing ? 
-                      "bg-gray-200 text-gray-500" : 
-                      offlineMode ?
-                        "bg-gray-200 text-gray-500" :
-                        "bg-blue-100 text-blue-800 hover:bg-blue-200"
-                  }`}
-                >
-                  {syncing ? "Syncing..." : "Sync Now"}
-                </button>
+              </div>
+              
+              {/* Import Database from Server */}
+              <div className="p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <div>
+                    <div className="font-medium">Import Database from Server</div>
+                    <div className="text-sm text-gray-500">Replace local copy with server data</div>
+                  </div>
+                  <button 
+                    onClick={importFullDatabase}
+                    disabled={saving || offlineMode}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                      saving || offlineMode
+                        ? "bg-gray-200 text-gray-500" 
+                        : "bg-blue-100 text-blue-800 hover:bg-blue-200"
+                    }`}
+                  >
+                    <ArrowDownToLine size={16} className="inline-block mr-1" />
+                    Import
+                  </button>
+                </div>
+                
+                <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                  <AlertCircle size={14} className="inline-block mr-1 text-amber-500" />
+                  This will replace your local database and reset all learning progress
+                </div>
+              </div>
+              
+              {/* Export Progress */}
+              <div className="p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <div>
+                    <div className="font-medium">Export Learning Progress</div>
+                    <div className="text-sm text-gray-500">Save your SRS data</div>
+                  </div>
+                  <button 
+                    onClick={exportSRSProgress}
+                    disabled={saving || dataStats.wordCount === 0}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                      saving || dataStats.wordCount === 0
+                        ? "bg-gray-200 text-gray-500" 
+                        : "bg-green-100 text-green-800 hover:bg-green-200"
+                    }`}
+                  >
+                    <ArrowUpFromLine size={16} className="inline-block mr-1" />
+                    Export
+                  </button>
+                </div>
+              </div>
+              
+              {/* Import Progress */}
+              <div className="p-4">
+                <div className="font-medium mb-1">Import Learning Progress</div>
+                <div className="text-sm text-gray-500 mb-3">Restore from backup file</div>
+                
+                <label className="flex items-center justify-center w-full px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 cursor-pointer">
+                  <ArrowDownToLine size={18} className="mr-2" />
+                  <span>Select Progress File</span>
+                  <input 
+                    type="file" 
+                    accept=".json" 
+                    className="hidden" 
+                    onChange={importSRSProgress}
+                    disabled={saving}
+                  />
+                </label>
+              </div>
+              
+              {/* Reset Progress */}
+              <div className="p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <div>
+                    <div className="font-medium">Reset All Progress</div>
+                    <div className="text-sm text-gray-500">Clear learning data for all words</div>
+                  </div>
+                  <button 
+                    onClick={resetAllProgress}
+                    disabled={saving || dataStats.wordCount === 0}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                      saving || dataStats.wordCount === 0
+                        ? "bg-gray-200 text-gray-500" 
+                        : "bg-red-100 text-red-800 hover:bg-red-200"
+                    }`}
+                  >
+                    <Trash2 size={16} className="inline-block mr-1" />
+                    Reset
+                  </button>
+                </div>
+                
+                <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                  <AlertCircle size={14} className="inline-block mr-1 text-red-500" />
+                  This will reset all words to initial learning status
+                </div>
               </div>
               
               {/* Clear Cache */}
@@ -622,19 +776,6 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
                   Clear
                 </button>
               </div>
-            </div>
-            <div className="p-4 flex justify-between items-center">
-              <div>
-                <div className="font-medium">Reset Learning Progress</div>
-                <div className="text-sm text-gray-500">Reset all words to "Learning" status</div>
-              </div>
-              <button 
-                className="px-3 py-1.5 bg-red-100 text-red-800 rounded-lg text-sm font-medium"
-                onClick={resetAllWords}
-                disabled={saving || offlineMode}
-              >
-                Reset
-              </button>
             </div>
           </div>
           
@@ -654,8 +795,8 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
               </div>
               
               <p className="text-sm text-gray-700 mb-3">
-                HSK Master helps you master Chinese characters through context-based 
-                learning and spaced repetition.
+                HSK Master helps you master Chinese characters through spaced repetition
+                and practice. It works offline for character recognition practice.
               </p>
               
               <div className="text-center text-xs text-gray-500">

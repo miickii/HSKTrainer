@@ -28,6 +28,19 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
     }
   }, []);
   
+  // Helper to parse examples from word
+  const getExamplesFromWord = (word) => {
+    if (!word || !word.examples) return [];
+    
+    try {
+      const examples = JSON.parse(word.examples);
+      return Array.isArray(examples) ? examples : [];
+    } catch (err) {
+      console.error("Error parsing examples:", err);
+      return [];
+    }
+  };
+  
   // Request a new word and example
   const requestNewWord = useCallback(async () => {
     setLoading(true);
@@ -63,14 +76,17 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
       if (word) {
         setCurrentWord(word);
         
-        // Get an example for this word
-        try {
-          const exampleSentence = await vocabularyDB.getRandomSentenceForWord(word);
-          console.log(exampleSentence)
-          setExample(exampleSentence);
-        } catch (exErr) {
-          console.error("Error fetching example:", exErr);
-          // Continue even without an example
+        // Get examples for this word
+        const examples = getExamplesFromWord(word);
+        
+        if (examples && examples.length > 0) {
+          // Select a random example
+          const randomIndex = Math.floor(Math.random() * examples.length);
+          setExample(examples[randomIndex]);
+          console.log("Selected example:", examples[randomIndex]);
+        } else {
+          console.log("No examples found for word:", word.simplified);
+          setExample(null);
         }
       } else {
         setError("No words available for practice. Please check your database or HSK level settings.");
@@ -102,7 +118,7 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
     // Now evaluate transcription against the current word
     if (currentWord && currentWord.simplified) {
       try {
-        // Simple check to see if the word is in the transcription
+        // Check if the word is in the transcription
         const containsWord = transcribedText.includes(currentWord.simplified);
         
         // Update the word's learning progress
@@ -133,30 +149,7 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
   useEffect(() => {
     requestNewWord();
   }, [requestNewWord]);
-  
-  // Format the example for display
-  const formatExample = () => {
-    if (!example) return null;
-    
-    // If it's already an object with the right properties, use it
-    if (example.chinese && example.pinyin) {
-      return example;
-    }
-    
-    // If it's a string, it's probably the simplified text
-    if (typeof example === 'string') {
-      return {
-        chinese: example,
-        pinyin: "", // No pinyin available
-        english: "" // No translation available
-      };
-    }
-    
-    return null;
-  };
-  
-  const formattedExample = formatExample();
-  
+
   return (
     <div className="p-4 flex flex-col items-center space-y-6">
       {/* Connection status indicator */}
@@ -181,23 +174,39 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
           </div>
           
           {/* Example if available */}
-          {formattedExample && (
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm font-medium text-gray-700 mb-1">Example:</p>
-              <p className="text-lg">{formattedExample.chinese}</p>
-              {formattedExample.pinyin && <p className="text-sm text-gray-600 mt-1">{formattedExample.pinyin}</p>}
-              {formattedExample.english && <p className="text-sm text-gray-700 italic mt-1">{formattedExample.english}</p>}
+          {example && (
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+              <p className="text-sm font-medium text-gray-700 mb-2">Example Sentence:</p>
+              
+              {/* Show sentence with the target word highlighted */}
+              <div className="text-lg">
+                {example.chinese && example.chinese.split('').map((char, index) => (
+                  <span 
+                    key={index}
+                    className={char === currentWord.simplified ? 
+                      "text-blue-600 font-bold" : ""}
+                  >
+                    {char}
+                  </span>
+                ))}
+              </div>
+              
+              {/* Pinyin and English translation */}
+              {example.pinyin && <p className="text-sm text-gray-600 mt-2">{example.pinyin}</p>}
+              {example.english && <p className="text-sm text-gray-700 italic mt-1">{example.english}</p>}
+            </div>
+          )}
+          
+          {/* HSK Level Badge */}
+          {currentWord.level && (
+            <div className="mt-4 text-center">
+              <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-medium">
+                HSK {currentWord.level}
+              </span>
             </div>
           )}
         </div>
       ) : loading ? (
-        <div className="w-full max-w-md bg-white rounded-xl shadow-md p-5 text-center">
-          <div className="flex justify-center items-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
-          <p className="text-gray-500">Loading character...</p>
-        </div>
-      ) : error ? (
         <div className="w-full max-w-md bg-white rounded-xl shadow-md p-5 text-center">
           <div className="py-4 text-red-500">{error}</div>
           <div className="flex space-x-2 justify-center">

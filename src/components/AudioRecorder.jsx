@@ -15,6 +15,8 @@ export default function AudioRecorder({
   const [useHoldToSpeak, setUseHoldToSpeak] = useState(true);
   const [showWaveform, setShowWaveform] = useState(true);
   const [sensitivity, setSensitivity] = useState(1.5);
+  const [isAudioReady, setIsAudioReady] = useState(false);
+  const [isPreparingAudio, setIsPreparingAudio] = useState(false);
   
   // Refs for audio handling
   const isRecordingRef = useRef(false);
@@ -78,6 +80,8 @@ export default function AudioRecorder({
       const ctx = canvasRef.current.getContext("2d");
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     }
+    
+    setIsAudioReady(false);
   };
   
   // Clean up on unmount
@@ -93,6 +97,32 @@ export default function AudioRecorder({
       }
     };
   }, []);
+  
+  // Initialize audio context when component mounts
+  useEffect(() => {
+    // Early initialization of AudioContext to reduce startup delay
+    if (!audioContextRef.current && !disabled) {
+      try {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: 16000 // Fixed sample rate for better compatibility
+        });
+        
+        // Pre-load audio worklet to reduce delay later
+        if (audioContextRef.current.audioWorklet) {
+          const baseUrl = import.meta.env.BASE_URL || '/';
+          audioContextRef.current.audioWorklet.addModule(`${baseUrl}mic-processor.js`)
+            .then(() => {
+              console.log("Audio worklet pre-loaded successfully");
+            })
+            .catch(err => {
+              console.error("Error pre-loading audio worklet:", err);
+            });
+        }
+      } catch (err) {
+        console.error("Error initializing audio context:", err);
+      }
+    }
+  }, [disabled]);
   
   // Set up key event listeners for space bar
   useEffect(() => {
@@ -121,13 +151,14 @@ export default function AudioRecorder({
     };
   }, [useHoldToSpeak, isSending, disabled, isRecording]);
   
-  // Start recording
-  async function startRecording() {
-    if (disabled || isRecording || isSending) return;
+  // Prepare audio system - separate from actual recording start
+  async function prepareAudioSystem() {
+    if (isAudioReady || isPreparingAudio) return true;
     
     try {
+      setIsPreparingAudio(true);
       setError(null);
-      console.log("Starting audio recording...");
+      console.log("Preparing audio system...");
       
       // Create audio context if needed
       if (!audioContextRef.current) {
@@ -175,10 +206,7 @@ export default function AudioRecorder({
         throw new Error(`Audio system error: ${err.message}`);
       }
       
-      // Reset buffer
-      micBufferRef.current = [];
-      
-      // Handle audio samples from the processor
+      // Set up message handler for processor
       processorNodeRef.current.port.onmessage = (event) => {
         const { type, data } = event.data;
         
@@ -210,7 +238,36 @@ export default function AudioRecorder({
         }
       };
       
-      // Connect the audio nodes
+      setIsAudioReady(true);
+      setIsPreparingAudio(false);
+      return true;
+    } catch (err) {
+      console.error("Error preparing audio system:", err);
+      setError(`Microphone access failed: ${err.message}. Please check your browser permissions.`);
+      cleanupAudio();
+      setIsPreparingAudio(false);
+      return false;
+    }
+  }
+  
+  // Start recording - now just starts the actual recording process
+  async function startRecording() {
+    if (disabled || isRecording || isSending) return;
+    
+    try {
+      // First ensure the audio system is ready
+      if (!isAudioReady) {
+        const prepared = await prepareAudioSystem();
+        if (!prepared) return; // Exit if preparation failed
+      }
+      
+      setError(null);
+      console.log("Starting audio recording...");
+      
+      // Reset buffer
+      micBufferRef.current = [];
+      
+      // Connect the audio nodes - this actually starts the audio flow
       sourceRef.current.connect(processorNodeRef.current);
       console.log("Audio pipeline connected successfully");
       
@@ -234,7 +291,7 @@ export default function AudioRecorder({
       }
     } catch (err) {
       console.error("Error starting recording:", err);
-      setError(`Microphone access failed: ${err.message}. Please check your browser permissions.`);
+      setError(`Recording failed: ${err.message}`);
       cleanupAudio();
     }
   }
@@ -360,7 +417,7 @@ export default function AudioRecorder({
       console.error("Error saving setting:", error);
     }
   };
-  
+
   return (
     <div className="w-full max-w-sm mx-auto">
       <div className={`flex flex-col items-center justify-center p-4 space-y-4 border border-gray-200 rounded-xl shadow-sm transition-colors ${
@@ -404,6 +461,9 @@ export default function AudioRecorder({
         
         {/* Status indicator */}
         <div className="text-center">
+          {isPreparingAudio && (
+            <p className="text-sm text-gray-600">Preparing microphone...</p>
+          )}
           {isRecording ? (
             <p className="text-sm text-blue-600 animate-pulse">Recording... {useHoldToSpeak ? "Release to stop" : "Tap to stop"}</p>
           ) : isSending ? (
@@ -437,15 +497,17 @@ export default function AudioRecorder({
         {/* Main recording button */}
         {useHoldToSpeak ? (
           <button
-            onTouchStart={!disabled ? startRecording : undefined}
-            onTouchEnd={!disabled ? stopRecording : undefined}
-            onMouseDown={!disabled ? startRecording : undefined}
-            onMouseUp={!disabled ? stopRecording : undefined}
+            onTouchStart={() => !disabled && prepareAudioSystem().then(ready => { if (ready) startRecording(); })}
+            onMouseDown={() => !disabled && prepareAudioSystem().then(ready => { if (ready) startRecording(); })}
+            onTouchEnd={() => !disabled && isRecording && stopRecording()}
+            onMouseUp={() => !disabled && isRecording && stopRecording()}
             onMouseLeave={() => !disabled && isRecording && stopRecording()}
             disabled={disabled || isSending}
             className={`w-16 h-16 rounded-full flex items-center justify-center shadow-md transition-all ${
               isRecording
                 ? "bg-red-500 scale-110"
+                : isPreparingAudio
+                ? "bg-yellow-500"
                 : isSending
                 ? "bg-gray-400"
                 : "bg-blue-500 hover:bg-blue-600"
@@ -463,11 +525,22 @@ export default function AudioRecorder({
           </button>
         ) : (
           <button
-            onClick={!disabled ? (isRecording ? stopRecording : startRecording) : undefined}
+            onClick={() => {
+              if (disabled) return;
+              if (isRecording) {
+                stopRecording();
+              } else {
+                prepareAudioSystem().then(ready => {
+                  if (ready) startRecording();
+                });
+              }
+            }}
             disabled={disabled || isSending}
             className={`w-16 h-16 rounded-full flex items-center justify-center shadow-md transition-all ${
               isRecording
                 ? "bg-red-500 scale-110"
+                : isPreparingAudio
+                ? "bg-yellow-500"
                 : isSending
                 ? "bg-gray-400"
                 : "bg-blue-500 hover:bg-blue-600"
