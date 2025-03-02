@@ -2,79 +2,160 @@ import React, { useState, useEffect, useCallback } from "react";
 import { RefreshCw, CheckCircle, XCircle, Volume2, Wifi, WifiOff } from "lucide-react";
 import AudioRecorder from "../components/AudioRecorder";
 import { WebSocketUtils } from "../services/websocket-utils";
+import { vocabularyDB } from "../services/db";
 
 export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket }) {
-  const [sentence, setSentence] = useState(null);
+  const [currentWord, setCurrentWord] = useState(null);
+  const [example, setExample] = useState(null);
   const [transcription, setTranscription] = useState("");
-  const [updateResults, setUpdateResults] = useState(null);
+  const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [usedWordIds, setUsedWordIds] = useState([]);
+  const [hskLevels, setHskLevels] = useState([1, 2, 3]);
   
-  // Request a new sentence
-  const requestNewSentence = useCallback(async () => {
+  // Load HSK level settings
+  useEffect(() => {
+    try {
+      const appSettings = localStorage.getItem('appSettings');
+      if (appSettings) {
+        const settings = JSON.parse(appSettings);
+        if (settings.hskFocus && Array.isArray(settings.hskFocus)) {
+          setHskLevels(settings.hskFocus);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading settings:", error);
+    }
+  }, []);
+  
+  // Request a new word and example
+  const requestNewWord = useCallback(async () => {
     setLoading(true);
     setTranscription("");
-    setUpdateResults(null);
+    setResults(null);
     setError(null);
     
     try {
-      // Check WebSocket connection
-      if (!wsConnected || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        setError("Not connected to server. Please check your connection.");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        // Use WebSocketUtils to get a sentence
-        const response = await WebSocketUtils.getSentence(wsRef.current, [1, 2, 3]);
-        
-        // Set the sentence
-        setSentence(response.sentence);
-
-        // Save sampled words from the response
-        if (response.sampled_words && response.sampled_words.length > 0) {
-          console.log("Received sampled words:", response.sampled_words);
-          setUsedWordIds(response.sampled_words.map(word => word.id));
-        } else {
-          console.warn("No sampled words received from server");
+      // Get words due for review first, prioritizing each level in the user's selection
+      let word = null;
+      
+      // Try to get a word due for review at one of the selected HSK levels
+      for (const level of hskLevels) {
+        const dueWords = await vocabularyDB.getDueForReview(1, level);
+        if (dueWords && dueWords.length > 0) {
+          word = dueWords[0];
+          break;
         }
+      }
+      
+      // If no word due for review, get a random word
+      if (!word) {
+        const randomWords = await vocabularyDB.getRandomWords(1, 
+          hskLevels.length === 1 ? hskLevels[0] : null, 
+          []
+        );
         
-        setLoading(false);
-      } catch (err) {
-        console.error("Error requesting sentence:", err);
-        setError(`Failed to get sentence: ${err.message}`);
-        setLoading(false);
+        if (randomWords && randomWords.length > 0) {
+          word = randomWords[0];
+        }
+      }
+      
+      if (word) {
+        setCurrentWord(word);
+        
+        // Get an example for this word
+        try {
+          const exampleSentence = await vocabularyDB.getRandomSentenceForWord(word);
+          console.log(exampleSentence)
+          setExample(exampleSentence);
+        } catch (exErr) {
+          console.error("Error fetching example:", exErr);
+          // Continue even without an example
+        }
+      } else {
+        setError("No words available for practice. Please check your database or HSK level settings.");
       }
     } catch (err) {
-      console.error("Error requesting sentence:", err);
-      setError(`Failed to get sentence: ${err.message}`);
+      console.error("Error requesting word:", err);
+      setError(`Failed to get word: ${err.message}`);
+    } finally {
       setLoading(false);
     }
-  }, [wsConnected, wsRef]);
+  }, [hskLevels]);
   
   // Handle transcription start
   const handleTranscriptionStart = () => {
     setTranscription("");
-    setUpdateResults(null);
+    setResults(null);
   };
   
   // Handle transcription complete
   const handleTranscriptionComplete = async (data) => {
-    if (data.transcription) {
-      setTranscription(data.transcription);
+    if (!data || !data.transcription) {
+      setError("No transcription received");
+      return;
     }
     
-    if (data.update_results) {
-      setUpdateResults(data.update_results);
+    const transcribedText = data.transcription;
+    setTranscription(transcribedText);
+    
+    // Now evaluate transcription against the current word
+    if (currentWord && currentWord.simplified) {
+      try {
+        // Simple check to see if the word is in the transcription
+        const containsWord = transcribedText.includes(currentWord.simplified);
+        
+        // Update the word's learning progress
+        await vocabularyDB.updateWordAfterPractice(currentWord.id, containsWord);
+        
+        // Set results for display
+        setResults({
+          correct: containsWord,
+          word: currentWord.simplified,
+          pinyin: currentWord.pinyin,
+          meanings: currentWord.meanings
+        });
+        
+        // Automatically load next word after correct answer (after a short delay)
+        if (containsWord) {
+          setTimeout(() => {
+            requestNewWord();
+          }, 2000);
+        }
+      } catch (err) {
+        console.error("Error processing transcription:", err);
+        setError("Error evaluating your pronunciation");
+      }
     }
   };
   
-  // Load initial sentence
+  // Load initial word
   useEffect(() => {
-    requestNewSentence();
-  }, [requestNewSentence]);
+    requestNewWord();
+  }, [requestNewWord]);
+  
+  // Format the example for display
+  const formatExample = () => {
+    if (!example) return null;
+    
+    // If it's already an object with the right properties, use it
+    if (example.chinese && example.pinyin) {
+      return example;
+    }
+    
+    // If it's a string, it's probably the simplified text
+    if (typeof example === 'string') {
+      return {
+        chinese: example,
+        pinyin: "", // No pinyin available
+        english: "" // No translation available
+      };
+    }
+    
+    return null;
+  };
+  
+  const formattedExample = formatExample();
   
   return (
     <div className="p-4 flex flex-col items-center space-y-6">
@@ -90,34 +171,38 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
         }
       </div>
       
-      {/* Sentence Card */}
-      {sentence ? (
+      {/* Word and Example Card */}
+      {currentWord ? (
         <div className="w-full max-w-md bg-white rounded-xl shadow-md p-5">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold mb-2">{sentence.simplified}</h2>
-            
-            {/* Only show pinyin and translation after attempt */}
-            {transcription && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-md text-gray-700 mb-1">Pinyin: {sentence.pinyin}</p>
-                <p className="text-md text-gray-700">English: {sentence.english}</p>
-              </div>
-            )}
+          <div className="text-center mb-4">
+            <h2 className="text-5xl font-bold mb-2">{currentWord.simplified}</h2>
+            <p className="text-lg text-gray-500 mb-1">{currentWord.pinyin}</p>
+            <p className="text-md text-gray-700">{currentWord.meanings}</p>
           </div>
+          
+          {/* Example if available */}
+          {formattedExample && (
+            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm font-medium text-gray-700 mb-1">Example:</p>
+              <p className="text-lg">{formattedExample.chinese}</p>
+              {formattedExample.pinyin && <p className="text-sm text-gray-600 mt-1">{formattedExample.pinyin}</p>}
+              {formattedExample.english && <p className="text-sm text-gray-700 italic mt-1">{formattedExample.english}</p>}
+            </div>
+          )}
         </div>
       ) : loading ? (
         <div className="w-full max-w-md bg-white rounded-xl shadow-md p-5 text-center">
           <div className="flex justify-center items-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
           </div>
-          <p className="text-gray-500">Loading sentence...</p>
+          <p className="text-gray-500">Loading character...</p>
         </div>
       ) : error ? (
         <div className="w-full max-w-md bg-white rounded-xl shadow-md p-5 text-center">
           <div className="py-4 text-red-500">{error}</div>
           <div className="flex space-x-2 justify-center">
             <button 
-              onClick={requestNewSentence}
+              onClick={requestNewWord}
               className="mt-2 px-4 py-2 bg-blue-500 text-white rounded-lg"
             >
               Try Again
@@ -137,8 +222,7 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
         wsRef={wsRef} 
         onTranscriptionStart={handleTranscriptionStart}
         onTranscriptionComplete={handleTranscriptionComplete}
-        disabled={!sentence || loading || !wsConnected}
-        sampledWords={usedWordIds.length > 0 ? usedWordIds.map(id => ({ id })) : null}
+        disabled={!currentWord || loading || !wsConnected}
       />
       
       {/* Transcription Result */}
@@ -151,45 +235,47 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
         </div>
       )}
       
-      {/* Word Results */}
-      {updateResults && updateResults.length > 0 && (
+      {/* Results */}
+      {results && (
         <div className="w-full max-w-md bg-white rounded-xl shadow-md p-5">
-          <h3 className="text-lg font-medium mb-3 text-center">Results</h3>
-          <ul className="divide-y divide-gray-100">
-            {updateResults.map((result, idx) => (
-              <li key={idx} className="py-3 flex items-center justify-between">
-                <span className="font-medium">{result.word}</span>
-                <span 
-                  className={`flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                    result.correct 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}
-                >
-                  {result.correct ? (
-                    <>
-                      <CheckCircle size={16} className="mr-1" />
-                      Correct
-                    </>
-                  ) : (
-                    <>
-                      <XCircle size={16} className="mr-1" />
-                      Incorrect
-                    </>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="flex items-center justify-center mb-3">
+            {results.correct ? (
+              <div className="flex items-center text-green-600">
+                <CheckCircle size={24} className="mr-2" />
+                <span className="text-lg font-medium">Correct!</span>
+              </div>
+            ) : (
+              <div className="flex items-center text-red-600">
+                <XCircle size={24} className="mr-2" />
+                <span className="text-lg font-medium">Try Again</span>
+              </div>
+            )}
+          </div>
+          
+          {!results.correct && (
+            <div className="text-center text-sm text-gray-600 mt-2">
+              Say the character or a sentence containing the character
+            </div>
+          )}
+          
+          {/* Show next button for incorrect attempts */}
+          {!results.correct && (
+            <button
+              onClick={requestNewWord}
+              className="w-full mt-4 py-2 bg-blue-500 text-white rounded-lg"
+            >
+              Next Character
+            </button>
+          )}
         </div>
       )}
       
-      {/* New Sentence Button */}
+      {/* New Character Button */}
       <button
-        onClick={requestNewSentence}
-        disabled={loading || !wsConnected}
+        onClick={requestNewWord}
+        disabled={loading}
         className={`fixed right-4 bottom-20 p-4 rounded-full shadow-lg z-10 ${
-          loading || !wsConnected
+          loading
             ? 'bg-gray-400 text-white' 
             : 'bg-blue-500 text-white hover:bg-blue-600'
         }`}

@@ -1,5 +1,5 @@
 // src/services/websocket-utils.js
-// A simplified utility for WebSocket communication
+// A simplified utility for WebSocket communication focused only on transcription
 
 /**
  * Helper utility for WebSocket communication
@@ -48,7 +48,7 @@ export const WebSocketUtils = {
             }
           } catch (err) {
             // Not our response or parsing error, keep waiting
-            console.log("Received non-JSON message or unrelated WebSocket message", err);
+            console.log("Received non-JSON message or unrelated WebSocket message");
           }
         }
         
@@ -69,32 +69,13 @@ export const WebSocketUtils = {
     },
     
     /**
-     * Request a new practice sentence
-     * 
-     * @param {WebSocket} ws - The WebSocket connection
-     * @param {Array<number>} hskLevels - HSK levels to include
-     * @returns {Promise<Object>} - The sentence data
-     */
-    getSentence: async (ws, hskLevels = [1, 2, 3]) => {
-      const message = {
-        type: "get_sample_words",
-        hsk_levels: hskLevels,
-        count: 1
-      };
-      
-      console.log("Requesting sentence with HSK levels:", hskLevels);
-      return WebSocketUtils.sendAndWaitForResponse(ws, message, "sample_sentence");
-    },
-    
-    /**
      * Send audio for transcription
      * 
      * @param {WebSocket} ws - The WebSocket connection
      * @param {Array<number>} audioSamples - Audio samples (float32 array)
-     * @param {Array} sampledWords - Optional array of word objects to check pronunciation for
      * @returns {Promise<Object>} - The transcription result
      */
-    sendAudio: async (ws, audioSamples, sampledWords = null) => {
+    sendAudio: async (ws, audioSamples) => {
         // Validate audio data
         if (!audioSamples || audioSamples.length === 0) {
           throw new Error("No audio samples to send");
@@ -129,12 +110,6 @@ export const WebSocketUtils = {
             ],
           },
         };
-        
-        // Add sampled words if provided
-        if (sampledWords && Array.isArray(sampledWords)) {
-          message.sampled_words = sampledWords;
-          console.log(`Including ${sampledWords.length} sampled words with audio`);
-        }
         
         console.log(`Sending ${audioSamples.length} audio samples for transcription`);
         return WebSocketUtils.sendAndWaitForResponse(ws, message, "audio_upload_ack", 20000); // Longer timeout for audio

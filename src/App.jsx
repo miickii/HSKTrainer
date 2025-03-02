@@ -1,23 +1,50 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { Mic, BarChart2, BookOpen, Settings } from "lucide-react";
 import PracticePage from "./pages/PracticePage";
+import OfflinePracticePage from "./pages/OfflinePracticePage";
 import VocabularyPage from "./pages/VocabularyPage";
-import ProgressPage from "./pages/ProgressPage"; // Using the updated ProgressPage
+import ProgressPage from "./pages/ProgressPage";
 import SettingsPage from "./pages/SettingsPage";
 import { ENDPOINTS, createWebSocketConnection } from "./services/api";
-import { SyncService } from "./services/sync-service"; // Import the new SyncService
 
 function App() {
   const wsRef = useRef(null);
   const [activeTab, setActiveTab] = useState('practice');
   const [status, setStatus] = useState("connecting");
   const [offlineMode, setOfflineMode] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState(null);
-  const heartbeatIntervalRef = useRef(null);
+  const [preferOfflinePractice, setPreferOfflinePractice] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
 
+  // Load user preferences
+  useEffect(() => {
+    try {
+      const appSettings = localStorage.getItem('appSettings');
+      if (appSettings) {
+        const settings = JSON.parse(appSettings);
+        if (settings.preferOfflinePractice !== undefined) {
+          setPreferOfflinePractice(settings.preferOfflinePractice);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading settings:", error);
+    }
+  }, []);
+
+  // Function to connect to WebSocket
   const connect = useCallback(() => {
+    // Only attempt connection if not in offline practice mode
+    if (preferOfflinePractice) {
+      console.log("Using offline practice mode, not connecting to WebSocket");
+      return;
+    }
+    
+    // Check if we're online
+    if (!navigator.onLine) {
+      setOfflineMode(true);
+      setStatus("offline");
+      return;
+    }
+    
     // Create WebSocket connection
     wsRef.current = createWebSocketConnection(
       localStorage.getItem('wsUrl') || ENDPOINTS.ws
@@ -44,12 +71,12 @@ function App() {
       
       // Try to reconnect after a delay if page is still open
       setTimeout(() => {
-        if (document.visibilityState === "visible" && navigator.onLine) {
+        if (document.visibilityState === "visible" && navigator.onLine && !preferOfflinePractice) {
           connect();
         }
       }, 3000);
     };
-  }, [setStatus, setOfflineMode, setWsConnected]);
+  }, [preferOfflinePractice]);
 
   // Function to reconnect WebSocket
   const reconnectWebSocket = useCallback(() => {
@@ -66,73 +93,20 @@ function App() {
     }
   }, [connect]);
 
-  // Function to initialize sync
-  const initSync = useCallback(async () => {
-    if (navigator.onLine && !offlineMode) {
-      setSyncing(true);
-      try {
-        const result = await SyncService.synchronizeVocabulary();
-        setSyncStatus(result);
-        console.log("Sync result:", result);
-      } catch (error) {
-        console.error("Sync error:", error);
-        setSyncStatus({
-          success: false,
-          message: `Sync failed: ${error.message}`
-        });
-      } finally {
-        setSyncing(false);
-      }
-    }
-  }, [offlineMode]);
-
   // Set up WebSocket connection
   useEffect(() => {
+    // Only connect to WebSocket if not preferring offline practice
+    if (preferOfflinePractice) {
+      console.log("Using offline practice mode, not connecting to WebSocket");
+      return;
+    }
+    
     // Check if we're online
     if (!navigator.onLine) {
       setOfflineMode(true);
       setStatus("offline");
       return;
     }
-
-    // Initialize sync on startup
-    SyncService.init().catch(err => console.error("Initial sync error:", err));
-
-    // Get custom WebSocket URL from localStorage if available
-    const storedWsUrl = localStorage.getItem('serverUrl');
-    const wsUrl = storedWsUrl || ENDPOINTS.ws;
-
-    const connect = () => {
-      // Create WebSocket connection
-      wsRef.current = createWebSocketConnection(wsUrl);
-      console.log("Creating WebSocket connection to:", wsUrl);
-
-      wsRef.current.onopen = () => {
-        console.log("WebSocket connected successfully");
-        setStatus("connected");
-        setOfflineMode(false);
-        setWsConnected(true);
-      };
-
-      wsRef.current.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        setStatus("error");
-        setWsConnected(false);
-      };
-
-      wsRef.current.onclose = (event) => {
-        console.log("WebSocket closed with code:", event?.code, "reason:", event?.reason);
-        setStatus("closed");
-        setWsConnected(false);
-        
-        // Try to reconnect after a delay if page is still open
-        setTimeout(() => {
-          if (document.visibilityState === "visible" && navigator.onLine) {
-            connect();
-          }
-        }, 3000);
-      };
-    };
 
     connect();
 
@@ -146,14 +120,11 @@ function App() {
     // Handle coming back online
     const handleOnline = () => {
       // Only try to reconnect if we were previously offline
-      if (offlineMode) {
+      if (offlineMode && !preferOfflinePractice) {
         // Wait a bit to make sure network is stable
         setTimeout(() => {
           connect();
           setStatus("connecting");
-          
-          // Try to sync when coming back online
-          initSync();
         }, 1000);
       }
     };
@@ -161,7 +132,8 @@ function App() {
     // Handle visibility change to reconnect when tab becomes active
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && navigator.onLine && 
-          (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN)) {
+          (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) && 
+          !preferOfflinePractice) {
         connect();
       }
     };
@@ -176,23 +148,45 @@ function App() {
       window.removeEventListener('online', handleOnline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [offlineMode, connect, initSync]);
+  }, [offlineMode, connect, preferOfflinePractice]);
 
-  // Handle manual sync request
-  const handleSyncRequest = () => {
-    initSync();
-  };
+  // Handle settings change
+  useEffect(() => {
+    const handleSettingsChange = (e) => {
+      if (e.key === 'appSettings') {
+        try {
+          const settings = JSON.parse(e.newValue || '{}');
+          if (settings.preferOfflinePractice !== undefined) {
+            setPreferOfflinePractice(settings.preferOfflinePractice);
+          }
+        } catch (error) {
+          console.error("Error parsing settings:", error);
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleSettingsChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleSettingsChange);
+    };
+  }, []);
 
   // Render content based on active tab
   const renderContent = () => {
     switch (activeTab) {
       case 'practice':
-        return <PracticePage 
-          wsRef={wsRef} 
-          offlineMode={offlineMode} 
-          wsConnected={wsConnected}
-          reconnectWebSocket={reconnectWebSocket}
-        />;
+        // Use offline practice if preferred or if we're offline with no WebSocket
+        return (preferOfflinePractice || (offlineMode && !wsConnected)) ? (
+          <OfflinePracticePage />
+        ) : (
+          <PracticePage 
+            wsRef={wsRef} 
+            offlineMode={offlineMode} 
+            wsConnected={wsConnected}
+            reconnectWebSocket={reconnectWebSocket}
+          />
+        );
       case 'vocabulary':
         return <VocabularyPage />;
       case 'progress':
@@ -201,9 +195,6 @@ function App() {
         return <SettingsPage 
           status={status}
           offlineMode={offlineMode}
-          onSyncRequest={handleSyncRequest}
-          syncing={syncing}
-          syncStatus={syncStatus}
         />;
       default:
         return <div>Page not found</div>;
@@ -213,23 +204,23 @@ function App() {
   return (
     <div className="h-full flex flex-col bg-gray-100 text-gray-900">
       {/* Status bar for offline mode */}
-      {offlineMode && (
+      {offlineMode && !preferOfflinePractice && (
         <div className="bg-yellow-500 text-white text-center text-sm py-1 px-4 safe-left safe-right">
-          You're currently offline. Connect to the server to practice.
+          You're currently offline. Limited features available.
+        </div>
+      )}
+      
+      {/* Show offline practice notice */}
+      {preferOfflinePractice && activeTab === 'practice' && (
+        <div className="bg-blue-500 text-white text-center text-sm py-1 px-4 safe-left safe-right">
+          Offline Practice Mode: Character Recognition
         </div>
       )}
       
       {/* Connection status indicator for debugging */}
-      {status !== "connected" && !offlineMode && (
+      {status !== "connected" && !offlineMode && !preferOfflinePractice && (
         <div className="bg-blue-100 text-blue-800 text-center text-sm py-1 px-4 safe-left safe-right">
           Connection status: {status}
-        </div>
-      )}
-
-      {/* Sync status message */}
-      {syncing && (
-        <div className="bg-blue-100 text-blue-800 text-center text-sm py-1 px-4 safe-left safe-right">
-          Syncing vocabulary data...
         </div>
       )}
       

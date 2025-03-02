@@ -63,7 +63,7 @@ export default function SettingsPage({ status, offlineMode, onSyncRequest, synci
     
     try {
       setSaving(true);
-      await SyncService.synchronizeVocabulary();
+      await SyncService.downloadFullDatabase();
       alert("Vocabulary data synchronized successfully");
     } catch (error) {
       console.error("Error syncing vocabulary:", error);

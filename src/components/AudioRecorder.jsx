@@ -6,8 +6,7 @@ export default function AudioRecorder({
   wsRef, 
   onTranscriptionStart, 
   onTranscriptionComplete,
-  disabled = false,
-  sampledWords = null
+  disabled = false
 }) {
   const [isRecording, setIsRecording] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -333,11 +332,7 @@ export default function AudioRecorder({
     
     try {
       // Use the WebSocketUtils to send audio data
-      const result = await WebSocketUtils.sendAudio(
-        wsRef.current, 
-        audioSamples, 
-        sampledWords
-      );
+      const result = await WebSocketUtils.sendAudio(wsRef.current, audioSamples);
       
       // Handle the transcription result
       if (onTranscriptionComplete) {

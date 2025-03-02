@@ -1,61 +1,46 @@
 // src/services/sync-service.js
-// This service handles synchronization between the server and local IndexedDB
+// Simplified sync service for offline-first functionality
 
 import { vocabularyDB } from './db';
-import { ENDPOINTS } from './api';
+import { ENDPOINTS, fetchVocabulary } from './api';
 
 /**
- * SyncService provides methods to synchronize vocabulary data
+ * SyncService provides methods to download and manage vocabulary data
  * between the backend server and local IndexedDB
  */
 export const SyncService = {
   /**
-   * Check if sync is needed
+   * Check if initial database download is needed
    * @returns {Promise<boolean>}
    */
-  needsSync: async function() {
+  needsInitialSetup: async function() {
     try {
-      // Check if sync flag is set in localStorage
-      if (localStorage.getItem('needsSync') === 'true') {
-        return true;
-      }
-      
       // Check if we have any words in local DB
       const localWords = await vocabularyDB.getAll();
       if (localWords.length === 0) {
         return true;
       }
       
-      // Check when the last sync occurred
-      const lastSync = localStorage.getItem('lastSync');
-      if (!lastSync) {
-        return true;
-      }
-      
-      // If last sync was more than a day ago, sync again
-      const lastSyncDate = new Date(lastSync);
-      const oneDayAgo = new Date();
-      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-      
-      if (lastSyncDate < oneDayAgo) {
-        return true;
-      }
-      
       return false;
     } catch (error) {
-      console.error("Error checking sync status:", error);
-      return true; // Sync to be safe if there's an error
+      console.error("Error checking initial setup status:", error);
+      return true; // Assume we need setup if there's an error
     }
   },
   
   /**
-   * Synchronize vocabulary from the server to IndexedDB
+   * Download the full database from server
    * @returns {Promise<{success: boolean, message: string, count: number}>}
    */
-  synchronizeVocabulary: async function() {
-    console.log("Starting vocabulary synchronization...");
+  downloadFullDatabase: async function() {
+    console.log("Starting full database download...");
     
     try {
+      // Check if we're online
+      if (!navigator.onLine) {
+        throw new Error("Cannot download database while offline");
+      }
+      
       // Fetch vocabulary from server
       const response = await fetch(ENDPOINTS.vocabulary, {
         headers: {
@@ -63,72 +48,73 @@ export const SyncService = {
         }
       });
       
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      let vocabulary = []
+      if (response.ok) {
+        vocabulary = await response.json();
+        console.log(`Received ${vocabulary.length} words from server`);
       }
       
-      const serverWords = await response.json();
-      console.log(`Received ${serverWords.length} words from server`);
-      
-      if (!Array.isArray(serverWords) || serverWords.length === 0) {
+      if (!Array.isArray(vocabulary) || vocabulary.length === 0) {
         throw new Error("Server returned empty or invalid vocabulary data");
       }
       
-      // Get existing local words for comparison
-      const localWords = await vocabularyDB.getAll();
-      console.log(`Found ${localWords.length} words in local database`);
+      console.log(`Received ${vocabulary.length} words from server`);
       
-      // Build a map of local words by ID for quick lookup
-      const localWordsMap = new Map();
-      localWords.forEach(word => {
-        localWordsMap.set(word.id, word);
-      });
+      // Import data to local database
+      const wordCount = await vocabularyDB.importFromServer(vocabulary);
       
-      // Process server words in batches to avoid transaction timeouts
-      const processedCount = await vocabularyDB.syncFromServer(serverWords);
-      
-      // Update sync timestamp
-      localStorage.setItem('lastSync', new Date().toISOString());
-      localStorage.setItem('needsSync', 'false');
+      // Update last download timestamp
+      localStorage.setItem('lastDatabaseDownload', new Date().toISOString());
       
       return {
         success: true,
-        message: `Successfully synchronized ${processedCount} words`,
-        count: processedCount
+        count: wordCount
       };
     } catch (error) {
-      console.error("Vocabulary synchronization failed:", error);
+      console.error("Database download failed:", error);
       return {
         success: false,
-        message: `Synchronization failed: ${error.message}`,
+        message: `Database download failed: ${error.message}`,
         count: 0
       };
     }
   },
   
   /**
-   * Initialize synchronization on app startup
+   * Initialize application on first run
    * @returns {Promise<void>}
    */
   init: async function() {
     try {
-      // Check if we're online
-      if (!navigator.onLine) {
-        console.log("Offline, skipping initial sync");
-        return;
-      }
+      // Check if we need initial setup
+      const needsSetup = await this.needsInitialSetup();
       
-      // Check if we need to sync
-      const shouldSync = await this.needsSync();
-      
-      if (shouldSync) {
-        console.log("Initial sync needed, starting synchronization...");
-        await this.synchronizeVocabulary();
+      if (needsSetup) {
+        console.log("Initial setup needed, downloading database...");
+        
+        // Check if we're online
+        if (!navigator.onLine) {
+          console.log("Offline, can't perform initial setup");
+          localStorage.setItem('needsSetup', 'true'); // Flag for later
+          return;
+        }
+        
+        // Download full database
+        const result = await this.downloadFullDatabase();
+        
+        if (result.success) {
+          console.log("Initial setup completed successfully");
+          localStorage.removeItem('needsSetup');
+        } else {
+          console.error("Initial setup failed:", result.message);
+          localStorage.setItem('needsSetup', 'true'); // Try again later
+        }
       } else {
-        console.log("No initial sync needed");
+        console.log("No initial setup needed, database already exists");
       }
     } catch (error) {
-      console.error("Error during sync initialization:", error);
+      console.error("Error during initialization:", error);
+      localStorage.setItem('needsSetup', 'true'); // Try again later
     }
   }
 };

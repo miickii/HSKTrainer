@@ -1,8 +1,8 @@
-// src/services/api.js - API endpoints and REST operations
+// src/services/api.js - Simplified API endpoints for offline-first approach
 
 // Get API URLs from localStorage first, then environment variables, then defaults
 const API_URL = localStorage.getItem('serverUrl') || import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const WS_URL = localStorage.getItem('wsUrl') || import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
+const WS_URL = localStorage.getItem('wsUrl') || import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/api';
 
 // For debugging
 console.log(`Using API_URL: ${API_URL}`);
@@ -11,13 +11,10 @@ console.log(`Using WS_URL: ${WS_URL}`);
 // API endpoints
 export const ENDPOINTS = {
   // WebSocket endpoint
-  ws: `${WS_URL}/ws/api`,
+  ws: WS_URL,
   
   // REST API endpoints
   vocabulary: `${API_URL}/api/vocabulary`,
-  downloadVocabulary: `${API_URL}/api/vocabulary`, // Point to same endpoint as vocabulary
-  updateWord: (wordId) => `${API_URL}/api/update-word/${wordId}`,
-  toggleFavorite: (wordId) => `${API_URL}/api/toggle-favorite/${wordId}`,
   transcribe: `${API_URL}/api/transcribe`,
   
   // Health check
@@ -29,7 +26,9 @@ export const checkApiConnection = async () => {
   try {
     const response = await fetch(ENDPOINTS.health, { 
       method: 'GET',
-      headers: { 'Accept': 'application/json' }
+      headers: { 'Accept': 'application/json' },
+      // Short timeout to prevent long waits
+      signal: AbortSignal.timeout(2000)
     });
     return response.ok;
   } catch (error) {
@@ -38,11 +37,6 @@ export const checkApiConnection = async () => {
   }
 };
 
-// REST API functions
-/**
- * Fetch vocabulary data from the server
- * @returns {Promise<Array>} The vocabulary data
- */
 export const fetchVocabulary = async () => {
   try {
     const response = await fetch(ENDPOINTS.vocabulary);
@@ -68,15 +62,6 @@ export const fetchVocabulary = async () => {
   }
 };
 
-// WebSocket message types (for reference)
-export const WS_MESSAGE_TYPES = {
-  GET_SAMPLE_WORDS: 'get_sample_words',
-  UPLOAD_AUDIO: 'upload_audio',
-  SAMPLE_SENTENCE: 'sample_sentence',
-  AUDIO_UPLOAD_ACK: 'audio_upload_ack',
-  ERROR: 'error'
-};
-
 /**
  * Create a WebSocket connection
  * @param {string} url - Optional custom WebSocket URL
@@ -84,12 +69,7 @@ export const WS_MESSAGE_TYPES = {
  */
 export const createWebSocketConnection = (url = null) => {
   // Use provided URL or default from ENDPOINTS
-  let wsUrl = url || ENDPOINTS.ws;
-  
-  // Ensure the WebSocket URL includes the path
-  if (!wsUrl.includes('/ws/api')) {
-    wsUrl = wsUrl.endsWith('/') ? `${wsUrl}ws/api` : `${wsUrl}/ws/api`;
-  }
+  const wsUrl = url || ENDPOINTS.ws;
   
   console.log(`Creating WebSocket connection to ${wsUrl}`);
   return new WebSocket(wsUrl);
