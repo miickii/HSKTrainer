@@ -181,7 +181,7 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
       )}
       
       {/* Main content area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex flex flex-col">
         {/* Always show the character and example when available */}
         {currentWord && !loading ? (
           <div className="w-full max-w-md mx-auto bg-white rounded-xl shadow-sm border border-neutral-100 p-4 mb-3">
@@ -265,7 +265,7 @@ export default function PracticePage({ wsRef, wsConnected, reconnectWebSocket })
       </div>
       
       {/* Audio Recorder */}
-      <div className="mt-auto">
+      <div className="">
         <AudioRecorder 
           wsRef={wsRef} 
           onTranscriptionStart={handleTranscriptionStart}
