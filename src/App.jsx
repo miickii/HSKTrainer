@@ -42,9 +42,9 @@ function App() {
           // Pre-parse examples to avoid doing it repeatedly
           data.forEach(word => {
             try {
-              word.parsedExamples = JSON.parse(word.examples || '[]');
+              word.examples = JSON.parse(word.examples || '[]');
             } catch (e) {
-              word.parsedExamples = [];
+              word.examples = [];
               console.error("Error parsing examples for word:", word.id);
             }
           });
@@ -83,8 +83,8 @@ function App() {
   });
 
   const getExamplesFromWord = (word) => {
-    if (!word || !word.parsedExamples) return [];
-    return word.parsedExamples;
+    if (!word || !word.examples) return [];
+    return word.examples;
   };
   
   // Function to select a new word (move this from practice pages)
@@ -103,7 +103,7 @@ function App() {
           // Check HSK level and SRS level is 0
           if (!hskLevels.includes(word.level) || word.srsLevel !== 0) return false;
           // Check for examples
-          return Array.isArray(word.parsedExamples) && word.parsedExamples.length > 0;
+          return Array.isArray(word.examples) && word.examples.length > 0;
         });
         
         if (srsLevel0Words.length > 0) {
@@ -120,8 +120,8 @@ function App() {
           // Check if due for review
           const today = new Date().toISOString().split('T')[0];
           return word.nextReview <= today && 
-                 Array.isArray(word.parsedExamples) && 
-                 word.parsedExamples.length > 0;
+                 Array.isArray(word.examples) && 
+                 word.examples.length > 0;
         });
         
         if (dueWords.length > 0) {
@@ -132,8 +132,8 @@ function App() {
           // No due words, pick a random word from selected HSK levels
           const randomWords = vocabularyWords.filter(word => {
             return hskLevels.includes(word.level) && 
-                   Array.isArray(word.parsedExamples) && 
-                   word.parsedExamples.length > 0;
+                   Array.isArray(word.examples) && 
+                   word.examples.length > 0;
           });
           
           if (randomWords.length > 0) {

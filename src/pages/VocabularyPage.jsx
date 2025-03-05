@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Search, X, Filter, Heart, BookOpen, Volume2 } from "lucide-react";
 import { vocabularyDB } from "../services/db";
 import { v4 as uuidv4 } from 'uuid';
@@ -8,38 +8,53 @@ export default function VocabularyPage({ words, loading, onUpdateWord }) {
   const [selectedLevel, setSelectedLevel] = useState(null);
   const [filter, setFilter] = useState("all"); // all, mastered, learning, favorite
   const [showDetailId, setShowDetailId] = useState(null);
+  const [isFiltering, setIsFiltering] = useState(true);
+  const [filteredResults, setFilteredResults] = useState([]);
   const searchInputRef = useRef(null);
-  
+
+  const isLoading = loading || isFiltering;
+
   // Filter and search words
-  const filteredWords = words.filter(word => {
-    let matches = true;
+  useEffect(() => {
+    // Set filtering state immediately to show loading UI
+    setIsFiltering(true);
     
-    // Apply HSK level filter
-    if (selectedLevel !== null) {
-      matches = matches && word.level === selectedLevel;
-    }
+    // Defer the actual filtering to the next tick to let UI update
+    const timeoutId = setTimeout(() => {
+      const results = words.filter(word => {
+        let matches = true;
+        
+        // Your existing filter logic
+        if (selectedLevel !== null) {
+          matches = matches && word.level === selectedLevel;
+        }
+        
+        if (filter === "mastered") {
+          matches = matches && (word.correctCount > 0);
+        } else if (filter === "learning") {
+          matches = matches && (word.correctCount === 0);
+        } else if (filter === "favorite") {
+          matches = matches && word.isFavorite;
+        }
+        
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          matches = matches && (
+            word.simplified.includes(searchTerm) ||
+            word.pinyin?.toLowerCase().includes(searchLower) ||
+            word.meanings?.toLowerCase().includes(searchLower)
+          );
+        }
+        
+        return matches;
+      });
+      
+      setFilteredResults(results);
+      setIsFiltering(false);
+    }, 0); // 0ms timeout pushes this to the next event loop tick
     
-    // Apply mastery filter
-    if (filter === "mastered") {
-      matches = matches && (word.correctCount > 0);
-    } else if (filter === "learning") {
-      matches = matches && (word.correctCount === 0);
-    } else if (filter === "favorite") {
-      matches = matches && word.isFavorite;
-    }
-    
-    // Apply search term
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      matches = matches && (
-        word.simplified.includes(searchTerm) ||
-        word.pinyin?.toLowerCase().includes(searchLower) ||
-        word.meanings?.toLowerCase().includes(searchLower)
-      );
-    }
-    
-    return matches;
-  });
+    return () => clearTimeout(timeoutId);
+  }, [words, searchTerm, selectedLevel, filter]);
   
   // Clear search
   const clearSearch = () => {
@@ -191,23 +206,31 @@ export default function VocabularyPage({ words, loading, onUpdateWord }) {
       </div>
       
       {/* Results Count */}
-      <div className="mb-4 text-sm text-neutral-500">
-        {filteredWords.length} {filteredWords.length === 1 ? 'word' : 'words'} found
-      </div>
+      {!loading && !isFiltering && (
+        <div className="mb-4 text-sm text-neutral-500">
+          {filteredResults.length} {filteredResults.length === 1 ? 'word' : 'words'} found
+        </div>
+      )}
       
       {/* Word List */}
       {loading ? (
         <div className="flex justify-center items-center py-10">
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-red-500"></div>
+          <span className="ml-3">Loading vocabulary...</span>
         </div>
-      ) : filteredWords.length === 0 ? (
+      ) : isFiltering ? (
+        <div className="flex justify-center items-center py-10">
+          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-red-500"></div>
+          <span className="ml-3">Filtering words...</span>
+        </div>
+      ) : filteredResults.length === 0 ? (
         <div className="text-center py-10">
           <div className="text-neutral-400 mb-2">No words found</div>
           <div className="text-sm text-neutral-500">Try adjusting your filters</div>
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredWords.map(word => (
+          {filteredResults.map(word => (
             <div 
               key={word.id}
               className="bg-white rounded-xl shadow-sm border border-neutral-100 overflow-hidden"
