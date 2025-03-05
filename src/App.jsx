@@ -166,13 +166,15 @@ function App() {
       return null;
     }
   }, [vocabularyWords]);
-  
-  // Update word in vocabulary after practice
-  const updateWordAfterPractice = useCallback(async (id, wasCorrect) => {
+
+  const updateWord = useCallback(async (id, updatedWord) => {
     try {
-      // Update in database
-      const updatedWord = await vocabularyDB.updateWordAfterPractice(id, wasCorrect);
-      
+      try {
+        updatedWord.examples = JSON.parse(updatedWord.examples || '[]');
+      } catch (e) {
+        updatedWord.examples = [];
+        console.error("Error parsing examples for word:", updatedWord.id);
+      }
       // Update in local state
       setVocabularyWords(prev => 
         prev.map(word => word.id === id ? updatedWord : word)
@@ -189,6 +191,29 @@ function App() {
       throw error;
     }
   }, [currentWord]);
+  
+  // Update word in vocabulary after practice
+  // const updateWordAfterPractice = useCallback(async (id, wasCorrect) => {
+  //   try {
+  //     // Update in database
+  //     const updatedWord = await vocabularyDB.updateWordAfterPractice(id, wasCorrect);
+      
+  //     // Update in local state
+  //     setVocabularyWords(prev => 
+  //       prev.map(word => word.id === id ? updatedWord : word)
+  //     );
+      
+  //     // Update current word if it's the one we modified
+  //     if (currentWord && currentWord.id === id) {
+  //       setCurrentWord(updatedWord);
+  //     }
+      
+  //     return updatedWord;
+  //   } catch (error) {
+  //     console.error("Error updating word:", error);
+  //     throw error;
+  //   }
+  // }, [currentWord]);
 
   // Function to connect to WebSocket
   const connect = useCallback(() => {
@@ -333,7 +358,7 @@ function App() {
             currentWord={currentWord}
             example={currentExample}
             selectNewWord={selectNewWord}
-            updateWordAfterPractice={updateWordAfterPractice}
+            updateWord={updateWord}
             loading={vocabLoading}
           />
         ) : (
@@ -345,7 +370,7 @@ function App() {
             currentWord={currentWord}
             currentExample={currentExample}
             selectNewWord={selectNewWord}
-            updateWordAfterPractice={updateWordAfterPractice}
+            updateWord={updateWord}
             loading={vocabLoading}
           />
         );
@@ -353,11 +378,7 @@ function App() {
         return <VocabularyPage 
           words={vocabularyWords}
           loading={vocabLoading}
-          onUpdateWord={(updatedWord) => {
-            setVocabularyWords(prev => 
-              prev.map(word => word.id === updatedWord.id ? updatedWord : word)
-            );
-          }}
+          updateWord={updateWord}
         />;
       case 'progress':
         return <ProgressPage 

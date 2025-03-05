@@ -6,7 +6,7 @@ export default function OfflinePracticePage({
   currentWord, 
   example, 
   selectNewWord, 
-  updateWordAfterPractice,
+  updateWord,
   loading
 }) {
   const [showDetails, setShowDetails] = useState(false);
@@ -70,8 +70,9 @@ export default function OfflinePracticePage({
     if (!currentWord) return;
     
     try {
+      const updatedWord = await vocabularyDB.updateWordAfterPractice(currentWord.id, recognized);
       // Update word using the provided function
-      await updateWordAfterPractice(currentWord.id, recognized);
+      updateWord(currentWord.id, updatedWord);
       
       // Update UI
       setAnswerStatus(recognized ? "correct" : "incorrect");
@@ -90,7 +91,7 @@ export default function OfflinePracticePage({
       const updatedWord = await vocabularyDB.toggleFavorite(currentWord.id);
       
       // Update in parent component
-      updateWordAfterPractice(currentWord.id, null, updatedWord);
+      updateWord(currentWord.id, updatedWord);
     } catch (error) {
       console.error("Error toggling favorite:", error);
     }

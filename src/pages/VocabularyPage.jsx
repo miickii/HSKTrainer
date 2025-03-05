@@ -3,7 +3,7 @@ import { Search, X, Filter, Heart, BookOpen, Volume2 } from "lucide-react";
 import { vocabularyDB } from "../services/db";
 import { v4 as uuidv4 } from 'uuid';
 
-export default function VocabularyPage({ words, loading, onUpdateWord }) {
+export default function VocabularyPage({ words, loading, updateWord }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedLevel, setSelectedLevel] = useState(null);
   const [filter, setFilter] = useState("all"); // all, mastered, learning, favorite
@@ -54,7 +54,7 @@ export default function VocabularyPage({ words, loading, onUpdateWord }) {
     }, 0); // 0ms timeout pushes this to the next event loop tick
     
     return () => clearTimeout(timeoutId);
-  }, [words, searchTerm, selectedLevel, filter]);
+  }, [words, searchTerm, selectedLevel, filter, updateWord]);
   
   // Clear search
   const clearSearch = () => {
@@ -72,7 +72,7 @@ export default function VocabularyPage({ words, loading, onUpdateWord }) {
       const updatedWord = await vocabularyDB.toggleFavorite(id);
       
       // Use the provided update function
-      onUpdateWord(updatedWord);
+      updateWord(id, updatedWord);
     } catch (error) {
       console.error("Error toggling favorite status:", error);
     }

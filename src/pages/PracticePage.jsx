@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { RefreshCw, CheckCircle, XCircle, Volume2 } from "lucide-react";
 import AudioRecorder from "../components/AudioRecorder";
 import { WebSocketUtils } from "../services/websocket-utils";
+import { vocabularyDB } from "../services/db";
 
 export default function PracticePage({ 
   wsRef, 
@@ -10,7 +11,7 @@ export default function PracticePage({
   currentWord,
   example,
   selectNewWord,
-  updateWordAfterPractice,
+  updateWord,
   loading: propLoading
 }) {
   const [transcription, setTranscription] = useState("");
@@ -77,9 +78,10 @@ export default function PracticePage({
       try {
         // Check if the word is in the transcription
         const containsWord = transcribedText.includes(currentWord.simplified);
+        const updatedWord = await vocabularyDB.updateWordAfterPractice(id, containsWord);
         
         // Update the word's learning progress using the function from props
-        await updateWordAfterPractice(currentWord.id, containsWord);
+        updateWord(currentWord.id, updateWord);
         
         // Set results for display
         setResults({
