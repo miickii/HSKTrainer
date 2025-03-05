@@ -2,20 +2,24 @@ import React, { useState, useEffect, useCallback } from "react";
 import { RefreshCw, CheckCircle, XCircle, ArrowRight, Eye, Bookmark } from "lucide-react";
 import { vocabularyDB } from "../services/db";
 
-export default function OfflinePracticePage() {
-  const [currentWord, setCurrentWord] = useState(null);
-  const [loading, setLoading] = useState(true);
+export default function OfflinePracticePage({ 
+  currentWord, 
+  example, 
+  selectNewWord, 
+  updateWordAfterPractice,
+  loading
+}) {
   const [showDetails, setShowDetails] = useState(false);
   const [answerStatus, setAnswerStatus] = useState(null); // "correct", "incorrect", or null
   const [hskLevels, setHskLevels] = useState([1, 2, 3]); // Default HSK levels to practice
-  const [example, setExample] = useState("")
   const [showHint, setShowHint] = useState(false);
+  const [showOnlySrsLevel0, setShowOnlySrsLevel0] = useState(false);
   
   // Load settings on component mount
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        // Try to load HSK level focus from localStorage
+        // Try to load settings from localStorage
         const appSettings = localStorage.getItem('appSettings');
         if (appSettings) {
           const settings = JSON.parse(appSettings);
@@ -25,6 +29,9 @@ export default function OfflinePracticePage() {
           if (settings.practiceMode) {
             setPracticeMode(settings.practiceMode);
           }
+          if (settings.showOnlySrsLevel0 !== undefined) {
+            setShowOnlySrsLevel0(settings.showOnlySrsLevel0);
+          }
         }
       } catch (error) {
         console.error("Error loading settings:", error);
@@ -33,103 +40,90 @@ export default function OfflinePracticePage() {
     
     loadSettings();
   }, []);
-
-  const getExamplesFromWord = (word) => {
-    if (!word || !word.examples) return [];
+  
+  // Toggle SRS Level 0 mode
+  const toggleSrsLevel0 = () => {
+    const newValue = !showOnlySrsLevel0;
+    setShowOnlySrsLevel0(newValue);
     
+    // Save to localStorage
     try {
-      const examples = JSON.parse(word.examples);
-      return Array.isArray(examples) ? examples : [];
-    } catch (err) {
-      console.error("Error parsing examples:", err);
-      return [];
+      const settings = JSON.parse(localStorage.getItem('appSettings') || '{}');
+      settings.showOnlySrsLevel0 = newValue;
+      localStorage.setItem('appSettings', JSON.stringify(settings));
+    } catch (error) {
+      console.error("Error saving setting:", error);
     }
   };
   
   // Load a new word to practice
   const loadNewWord = useCallback(async () => {
-    try {
-      setLoading(true);
-      setShowDetails(false);
-      setAnswerStatus(null);
-      setShowHint(false);
-      
-      // Get words due for review first
-      let word = null;
-      
-      // Try to get a word due for review at one of the selected HSK levels
-      for (const level of hskLevels) {
-        const dueWords = await vocabularyDB.getDueForReview(40, level);
-        if (dueWords && dueWords.length > 0) {
-            const randomWordIndex = Math.floor(Math.random() * dueWords.length);
-            word = dueWords[randomWordIndex];
-            break;
-        }
-      }
-      
-      // If no word due for review, get a random word
-      if (!word) {
-        const randomWords = await vocabularyDB.getRandomWords(40, 
-          hskLevels.length === 1 ? hskLevels[0] : null, 
-          []
-        );
-        
-        if (randomWords && randomWords.length > 0) {
-            const randomWordIndex = Math.floor(Math.random() * randomWords.length);
-            word = randomWords[randomWordIndex];
-        }
-      }
-      
-      if (word) {
-        setCurrentWord(word);
-
-        const examples = getExamplesFromWord(word);
-        
-        if (examples && examples.length > 0) {
-          // Select a random example
-          const randomIndex = Math.floor(Math.random() * examples.length);
-          setExample(examples[randomIndex]);
-        } else {
-          setExample(null);
-        }
-      } else {
-        // Fallback message if no words are available
-        console.error("No words available for practice");
-      }
-      
-      setLoading(false);
-    } catch (error) {
-      console.error("Error loading word:", error);
-      setLoading(false);
-    }
-  }, [hskLevels]);
-  
-  // Load initial word on mount
-  useEffect(() => {
-    loadNewWord();
-  }, [loadNewWord]);
+    setShowDetails(false);
+    setAnswerStatus(null);
+    setShowHint(false);
+    
+    await selectNewWord(hskLevels, showOnlySrsLevel0);
+  }, [hskLevels, showOnlySrsLevel0, selectNewWord]);
   
   // Handle user answer (self-reported recognition)
   const handleAnswer = async (recognized) => {
     if (!currentWord) return;
     
     try {
-      // Update word in database based on recognition
-      await vocabularyDB.updateWordAfterPractice(currentWord.id, recognized);
+      // Update word using the provided function
+      await updateWordAfterPractice(currentWord.id, recognized);
       
       // Update UI
       setAnswerStatus(recognized ? "correct" : "incorrect");
-      
-      // Show details
       setShowDetails(true);
-      
     } catch (error) {
       console.error("Error updating word:", error);
+    }
+  };
+  
+  // Handle toggling favorite status
+  const handleToggleFavorite = async () => {
+    if (!currentWord) return;
+    
+    try {
+      // Get updated word from database
+      const updatedWord = await vocabularyDB.toggleFavorite(currentWord.id);
+      
+      // Update in parent component
+      updateWordAfterPractice(currentWord.id, null, updatedWord);
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
     }
   };
 
   return (
     <div className="p-4 flex flex-col items-center space-y-6">
+      {/* SRS Level Toggle */}
+      <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-neutral-100 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-medium text-neutral-800">Word Selection Mode</div>
+            <div className="text-sm text-neutral-500">Focus on new vocabulary</div>
+          </div>
+          <button
+            onClick={toggleSrsLevel0}
+            className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none"
+            style={{ backgroundColor: showOnlySrsLevel0 ? '#ef4444' : '#e5e5e5' }}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform ${
+                showOnlySrsLevel0 ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+        <div className="mt-2 text-xs text-neutral-600">
+          {showOnlySrsLevel0 
+            ? "Only showing new words (SRS level 0)" 
+            : "Showing mixed vocabulary based on review schedule"}
+        </div>
+      </div>
+      
       {/* Character Display */}
       {currentWord ? (
         <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-neutral-100 p-5 flex flex-col items-center">
@@ -186,17 +180,7 @@ export default function OfflinePracticePage() {
           {/* Favorite Button */}
           {currentWord && (
             <button
-              onClick={async () => {
-                try {
-                  await vocabularyDB.toggleFavorite(currentWord.id);
-                  setCurrentWord(prev => ({
-                    ...prev,
-                    isFavorite: !prev.isFavorite
-                  }));
-                } catch (error) {
-                  console.error("Error toggling favorite:", error);
-                }
-              }}
+              onClick={handleToggleFavorite}
               className={`mt-4 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center ${
                 currentWord.isFavorite
                   ? "bg-red-100 text-red-600"

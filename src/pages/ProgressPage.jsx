@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from "react";
 import { CheckCircle, RefreshCw } from "lucide-react";
-import { vocabularyDB } from "../services/db";
 
-export default function ProgressPage() {
-  const [loading, setLoading] = useState(true);
+export default function ProgressPage({ words, loading: propLoading }) {
+  // Use local loading state for processing the data
+  const [localLoading, setLocalLoading] = useState(true);
   const [stats, setStats] = useState({
     totalWords: 0,
     masteredWords: 0,
     masteredByLevel: []
   });
   
-  // Load statistics
+  // Calculate statistics based on prop words
   useEffect(() => {
-    async function loadStats() {
+    async function calculateStats() {
       try {
-        setLoading(true);
+        setLocalLoading(true);
         
-        // Get all words
-        const allWords = await vocabularyDB.getAll();
+        // Use the words passed from props
+        const allWords = words || [];
         
         // Calculate mastered words (correct at least once)
         const mastered = allWords.filter(word => word.correctCount > 0);
@@ -61,19 +61,25 @@ export default function ProgressPage() {
           masteredByLevel
         });
         
-        setLoading(false);
+        setLocalLoading(false);
       } catch (error) {
-        console.error("Error loading statistics:", error);
-        setLoading(false);
+        console.error("Error calculating statistics:", error);
+        setLocalLoading(false);
       }
     }
     
-    loadStats();
-  }, []);
+    // Only calculate stats when words are available and not loading
+    if (!propLoading && words && words.length > 0) {
+      calculateStats();
+    }
+  }, [words, propLoading]);
+
+  // Determine if we should show loading state
+  const isLoading = propLoading || localLoading;
 
   return (
     <div className="p-4 pb-16">
-      {loading ? (
+      {isLoading ? (
         <div className="flex justify-center items-center py-10">
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-red-500"></div>
         </div>
@@ -106,6 +112,8 @@ export default function ProgressPage() {
                 : 0}% complete
             </div>
           </div>
+          
+          {/* Rest of your component remains the same */}
           
           {/* HSK Level Progress */}
           <div className="bg-white rounded-xl shadow-sm border border-neutral-100 p-4 mb-5">
@@ -165,7 +173,7 @@ export default function ProgressPage() {
             </div>
           </div>
           
-          {/* Refresh Button */}
+          {/* Replace reload with optional refresh method if needed */}
           <div className="mt-6 text-center">
             <button 
               onClick={() => window.location.reload()}

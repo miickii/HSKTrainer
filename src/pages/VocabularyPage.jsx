@@ -3,53 +3,12 @@ import { Search, X, Filter, Heart, BookOpen, Volume2 } from "lucide-react";
 import { vocabularyDB } from "../services/db";
 import { v4 as uuidv4 } from 'uuid';
 
-export default function VocabularyPage() {
-  const [words, setWords] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function VocabularyPage({ words, loading, onUpdateWord }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedLevel, setSelectedLevel] = useState(null);
   const [filter, setFilter] = useState("all"); // all, mastered, learning, favorite
   const [showDetailId, setShowDetailId] = useState(null);
   const searchInputRef = useRef(null);
-
-  // Load vocabulary words from local database
-  useEffect(() => {
-    async function loadVocabulary() {
-      try {
-        setLoading(true);
-        
-        // Load from IndexedDB
-        let data = await vocabularyDB.getAll();
-        
-        if (data.length === 0) {
-          console.log("No words found in local database");
-          setLoading(false);
-          return;
-        }
-        
-        // Sort words by level and then by simplified character
-        data.sort((a, b) => {
-          if (a.level !== b.level) {
-            return a.level - b.level;
-          }
-          return a.simplified.localeCompare(b.simplified, 'zh-CN');
-        });
-
-        data.forEach(word => {
-          word.examples = JSON.parse(word.examples);
-          console.log(word.examples)
-        });
-        
-        setWords(data);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error loading vocabulary:", error);
-        setLoading(false);
-      }
-    }
-    
-    loadVocabulary();
-  }, []);
   
   // Filter and search words
   const filteredWords = words.filter(word => {
@@ -97,12 +56,8 @@ export default function VocabularyPage() {
     try {
       const updatedWord = await vocabularyDB.toggleFavorite(id);
       
-      // Update the word in the local state
-      setWords(prevWords => 
-        prevWords.map(word => 
-          word.id === id ? updatedWord : word
-        )
-      );
+      // Use the provided update function
+      onUpdateWord(updatedWord);
     } catch (error) {
       console.error("Error toggling favorite status:", error);
     }
@@ -126,19 +81,6 @@ export default function VocabularyPage() {
     if (dateStr === tomorrowStr) return 'Tomorrow';
     
     return new Date(dateStr).toLocaleDateString();
-  };
-
-  // Get example data if available
-  const getWordExamples = (word) => {
-    if (!word.examples) return [];
-    
-    try {
-      const examples = JSON.parse(word.examples);
-      return Array.isArray(examples) ? examples : [];
-    } catch (error) {
-      console.error(`Error parsing examples for word ${word.id}:`, error);
-      return [];
-    }
   };
 
   return (
