@@ -108,7 +108,7 @@ export default function VocabularyPage() {
             All Levels
           </button>
           
-          {[1, 2, 3, 4, 5, 6].map(level => (
+          {[1, 2, 3, 4, 5, 6, 7].map(level => (
             <button
               key={level}
               onClick={() => setSelectedLevel(level)}
@@ -121,6 +121,16 @@ export default function VocabularyPage() {
               HSK {level}
             </button>
           ))}
+          <button
+            onClick={() => setSelectedLevel(-1)}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap flex-shrink-0 ${
+              selectedLevel === -1
+                ? "bg-blue-100 text-blue-800"
+                : "bg-neutral-100 text-neutral-600"
+            }`}
+          >
+            Chengyu
+          </button>
         </div>
         
         {/* Mastery Filter */}
@@ -216,20 +226,27 @@ export default function VocabularyPage() {
                   </div>
                   
                   <div className="flex items-center">
-                    {/* HSK Level Badge */}
-                    <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium mr-2">
-                      HSK {word.level}
-                    </span>
-                    
-                    {/* Mastery Indicator */}
-                    {word.correctCount > 0 ? (
-                      <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-medium mr-2">
-                        Mastered
+                    {word.level === -1 ? (
+                      <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium mr-2">
+                        Chengyu
                       </span>
                     ) : (
-                      <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium mr-2">
-                        Learning
+                      <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium mr-2">
+                        HSK {word.level}
                       </span>
+                    )}
+                    
+                    {/* Mastery Indicator - Only show for regular words, not chengyu */}
+                    {word.level !== -1 && (
+                      word.correctCount > 0 ? (
+                        <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-medium mr-2">
+                          Mastered
+                        </span>
+                      ) : (
+                        <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium mr-2">
+                          Learning
+                        </span>
+                      )
                     )}
 
                     {/* Favorite Button */}
@@ -260,7 +277,18 @@ export default function VocabularyPage() {
                 
                 {/* Meaning */}
                 <div className="mt-1 text-sm text-neutral-700">
-                  {word.meanings || word.english}
+                  {word.level === -1 ? (
+                      <div>
+                        {word.meanings && word.meanings.includes('----') ? (
+                            <p>{word.meanings.split('----')[0]}</p>
+                        ) : (
+                          <p>{word.meanings}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div>{word.meanings || word.english}</div>
+                    )
+                  }
                 </div>
                 
                 {/* SRS Level Indicator if available */}

@@ -96,6 +96,8 @@ export function AppProvider({ children }) {
         
         if (selectedLevel !== null) {
           matches = matches && word.level === selectedLevel;
+        } else {
+            matches = matches && word.level !== -1;
         }
         
         if (filterType === "mastered") {

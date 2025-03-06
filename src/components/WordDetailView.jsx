@@ -36,6 +36,11 @@ export default function WordDetailView({
       handleClose();
     }
   }, [word]);
+
+  useEffect(() => {
+    // If no word is available, close the view
+    console.log(word)
+  }, []);
   
   // Handle closing the detail view
   const handleClose = () => {
@@ -76,6 +81,9 @@ export default function WordDetailView({
   // If no word is available, return null
   if (!word) return null;
   
+  // Check if this is a chengyu
+  const isChengyu = word.level === -1;
+  
   // Render appropriate layout based on mode
   const renderContent = () => (
     <>
@@ -83,22 +91,43 @@ export default function WordDetailView({
       <div className="text-center mb-6">
         <div className="text-5xl font-bold mb-2">{word.simplified}</div>
         <div className="text-xl text-red-500 mb-1">{word.pinyin}</div>
-        <div className="text-lg text-neutral-700">{word.meanings || word.english}</div>
+
+        {isChengyu ? (
+                <div className="text-lg text-neutral-700">
+                    {word.meanings && word.meanings.includes('----') ? (
+                        <p>{word.meanings.split('----')[0]}</p>
+                    ) : (
+                        <p>{word.meanings}</p>
+                    )}
+                </div>
+            ) : (
+                <div className="text-lg text-neutral-700">{word.meanings || word.english}</div>
+            )
+        }   
         
         {/* HSK Level Badge and other top-level info */}
         <div className="flex items-center justify-center mt-3 space-x-2">
-          <span className="px-2 py-1 bg-red-50 text-red-600 rounded-full text-xs font-medium">
-            HSK {word.level}
-          </span>
-          
-          {word.correctCount > 0 ? (
-            <span className="px-2 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium">
-              Mastered
+          {isChengyu ? (
+            <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium">
+              Chengyu
             </span>
           ) : (
-            <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium">
-              Learning
+            <span className="px-2 py-1 bg-red-50 text-red-600 rounded-full text-xs font-medium">
+              HSK {word.level}
             </span>
+          )}
+          
+          {/* Only show mastery badges for regular words, not chengyu */}
+          {!isChengyu && (
+            word.correctCount > 0 ? (
+              <span className="px-2 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium">
+                Mastered
+              </span>
+            ) : (
+              <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium">
+                Learning
+              </span>
+            )
           )}
         </div>
       </div>
@@ -117,37 +146,41 @@ export default function WordDetailView({
         </button>
       </div>
       
-      {/* SRS & Statistics */}
-      <div className="bg-neutral-50 rounded-xl p-4 mb-6">
-        <h3 className="text-lg font-medium text-neutral-800 mb-3">Learning Progress</h3>
-        
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="text-center">
-            <div className="text-sm text-neutral-500">Correct</div>
-            <div className="text-xl font-medium text-neutral-800">{word.correctCount || 0}</div>
+      {/* SRS & Statistics - Only for regular words, not chengyu */}
+      {!isChengyu && (
+        <div className="bg-neutral-50 rounded-xl p-4 mb-6">
+          <h3 className="text-lg font-medium text-neutral-800 mb-3">Learning Progress</h3>
+          
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="text-center">
+              <div className="text-sm text-neutral-500">Correct</div>
+              <div className="text-xl font-medium text-neutral-800">{word.correctCount || 0}</div>
+            </div>
+            
+            <div className="text-center">
+              <div className="text-sm text-neutral-500">Incorrect</div>
+              <div className="text-xl font-medium text-neutral-800">{word.incorrectCount || 0}</div>
+            </div>
+            
+            <div className="text-center">
+              <div className="text-sm text-neutral-500">SRS Level</div>
+              <div className="text-xl font-medium text-neutral-800">{word.srsLevel || 0}</div>
+            </div>
           </div>
           
-          <div className="text-center">
-            <div className="text-sm text-neutral-500">Incorrect</div>
-            <div className="text-xl font-medium text-neutral-800">{word.incorrectCount || 0}</div>
-          </div>
-          
-          <div className="text-center">
-            <div className="text-sm text-neutral-500">SRS Level</div>
-            <div className="text-xl font-medium text-neutral-800">{word.srsLevel || 0}</div>
-          </div>
+          {word.nextReview && (
+            <div className="text-center text-sm text-neutral-600">
+              Next review: <span className="font-medium">{formatDate(word.nextReview)}</span>
+            </div>
+          )}
         </div>
-        
-        {word.nextReview && (
-          <div className="text-center text-sm text-neutral-600">
-            Next review: <span className="font-medium">{formatDate(word.nextReview)}</span>
-          </div>
-        )}
-      </div>
+      )}
       
       {/* Character details */}
-      <div className="bg-white rounded-xl border border-neutral-100 p-4 mb-6">
-        <h3 className="text-lg font-medium text-neutral-800 mb-3">Character Details</h3>
+      <div className={`${isChengyu ? 'bg-blue-50' : 'bg-white'} rounded-xl border ${isChengyu ? 'border-blue-100' : 'border-neutral-100'} p-4 mb-6`}>
+        <h3 className="text-lg font-medium text-neutral-800 mb-3">
+          {isChengyu ? 'Chengyu Details' : 'Character Details'}
+        </h3>
         
         <div className="space-y-2">
           {word.traditional && word.traditional !== word.simplified && (
@@ -164,12 +197,25 @@ export default function WordDetailView({
             </div>
           )}
           
-          {/* Add stroke count, character components, etc. if available */}
+          {/* Show additional info for Chengyu if available */}
+          {isChengyu && (
+            <div className="mt-4">
+              <div className="text-neutral-600 text-sm whitespace-pre-wrap">
+                {word.meanings && word.meanings.includes('----') ? (
+                  <>
+                    <p className="text-neutral-600">{word.meanings.split('----')[1]}</p>
+                  </>
+                ) : (
+                  <p>{word.meanings}</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       
       {/* Example sentences */}
-      <div className="bg-white rounded-xl border border-neutral-100 p-4 mb-6">
+      <div className={`${isChengyu ? 'bg-blue-50' : 'bg-white'} rounded-xl border ${isChengyu ? 'border-blue-100' : 'border-neutral-100'} p-4 mb-6`}>
         <h3 className="text-lg font-medium text-neutral-800 mb-3">Example Sentences</h3>
         
         {word.examples && word.examples.length > 0 ? (
@@ -177,7 +223,7 @@ export default function WordDetailView({
             {word.examples.map((example, index) => (
               <div 
                 key={uuidv4()}
-                className={`pb-4 ${index < word.examples.length - 1 ? "border-b border-neutral-100" : ""}`}
+                className={`pb-4 ${index < word.examples.length - 1 ? `border-b ${isChengyu ? 'border-blue-100' : 'border-neutral-100'}` : ""}`}
               >
                 <div className="text-lg mb-2">
                   {example.simplified}
@@ -210,7 +256,9 @@ export default function WordDetailView({
               <div></div> // Empty div for spacing
             )}
             
-            <h2 className="text-lg font-bold text-neutral-900">Word Details</h2>
+            <h2 className="text-lg font-bold text-neutral-900">
+              {isChengyu ? 'Chengyu Details' : 'Word Details'}
+            </h2>
             
             <button onClick={handleClose} className="p-1 text-neutral-500">
               <X size={24} />
@@ -227,7 +275,7 @@ export default function WordDetailView({
   
   if (mode === 'embedded') {
     return (
-      <div className="bg-white rounded-xl border border-neutral-100 p-4 mb-4">
+      <div className={`${isChengyu ? 'bg-blue-50' : 'bg-white'} rounded-xl border ${isChengyu ? 'border-blue-100' : 'border-neutral-100'} p-4 mb-4`}>
         {renderContent()}
       </div>
     );
@@ -236,7 +284,7 @@ export default function WordDetailView({
   // Default: fullscreen
   return (
     <div className="h-full flex flex-col">
-      <div className="sticky top-0 bg-white p-4 border-b border-neutral-100 flex justify-between items-center safe-top safe-left safe-right z-10">
+      <div className={`sticky top-0 ${isChengyu ? 'bg-blue-50' : 'bg-white'} p-4 border-b ${isChengyu ? 'border-blue-100' : 'border-neutral-100'} flex justify-between items-center safe-top safe-left safe-right z-10`}>
         {showBackButton ? (
           <button onClick={handleClose} className="p-1 text-neutral-500">
             <ChevronLeft size={24} />
@@ -245,12 +293,14 @@ export default function WordDetailView({
           <div></div> // Empty div for spacing
         )}
         
-        <h2 className="text-lg font-bold text-neutral-900">Word Details</h2>
+        <h2 className="text-lg font-bold text-neutral-900">
+          {isChengyu ? 'Chengyu Details' : 'Word Details'}
+        </h2>
         
         <div className="w-8"></div> {/* Spacer for centering title */}
       </div>
       
-      <div className="flex-1 overflow-y-auto p-4 pb-16 safe-left safe-right">
+      <div className={`flex-1 overflow-y-auto p-4 pb-16 safe-left safe-right ${isChengyu ? 'bg-blue-50/50' : ''}`}>
         {renderContent()}
       </div>
     </div>
