@@ -1,24 +1,103 @@
 import React, { useState, useEffect } from "react";
-import { Mic, BookOpen, BarChart2, Settings, WifiOff } from "lucide-react";
+import { HashRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Mic, BookOpen, BarChart2, Settings, WifiOff, Home } from "lucide-react";
 import PracticePage from "./pages/PracticePage";
 import OfflinePracticePage from "./pages/OfflinePracticePage";
 import VocabularyPage from "./pages/VocabularyPage";
 import ProgressPage from "./pages/ProgressPage";
 import SettingsPage from "./pages/SettingsPage";
+import GameSelectionPage from "./pages/GameSelectionPage";
+import ComponentBuilderPage from "./pages/ComponentBuilderPage";
 import { AppProvider, useApp } from "./context/AppContext";
 
 // Main App component that provides the context
 function App() {
   return (
     <AppProvider>
-      <AppContent />
+      <Router>
+        <AppContent />
+      </Router>
     </AppProvider>
+  );
+}
+
+// Navigation component extracted to be used with routing
+function Navigation() {
+  const location = useLocation();
+  const currentPath = location.pathname;
+  
+  // Don't show navigation on the game selection screen
+  if (currentPath === "/game-selection" || 
+      currentPath === "/component-builder") {
+    return null;
+  }
+  
+  // Maps paths to tabs
+  const pathToTab = {
+    "/practice": "practice",
+    "/vocabulary": "vocabulary",
+    "/progress": "progress",
+    "/settings": "settings"
+  };
+  
+  const activeTab = pathToTab[currentPath] || "practice";
+  
+  return (
+    <nav className="fixed bottom-0 w-full bg-white border-t border-neutral-100 safe-bottom-nav">
+      <div className="flex justify-around safe-left safe-right">
+        <RouterTab 
+          icon={<Home size={24} />} 
+          label="Games"
+          to="/game-selection"
+          isActive={currentPath === "/game-selection"}
+        />
+        
+        <RouterTab 
+          icon={<Mic size={24} />} 
+          label="Practice"
+          to="/practice"
+          isActive={activeTab === "practice"}
+        />
+        
+        <RouterTab 
+          icon={<BookOpen size={24} />} 
+          label="Words"
+          to="/vocabulary"
+          isActive={activeTab === "vocabulary"}
+        />
+        
+        <RouterTab 
+          icon={<BarChart2 size={24} />} 
+          label="Progress"
+          to="/progress"
+          isActive={activeTab === "progress"}
+        />
+        
+        <RouterTab 
+          icon={<Settings size={24} />} 
+          label="Settings"
+          to="/settings"
+          isActive={activeTab === "settings"}
+        />
+      </div>
+    </nav>
+  );
+}
+
+// RouterTab component
+function RouterTab({ icon, label, to, isActive }) {
+  const color = isActive ? "text-red-500" : "text-neutral-400";
+  
+  return (
+    <a href={`#${to}`} className={`p-2 flex flex-col items-center ${color}`}>
+      {icon}
+      <span className="text-xs mt-1">{label}</span>
+    </a>
   );
 }
 
 // App content that consumes the context
 function AppContent() {
-  const [activeTab, setActiveTab] = useState('practice');
   const { 
     offlineMode, 
     preferOfflinePractice, 
@@ -46,26 +125,10 @@ function AppContent() {
     };
   }, [detailViewActive, closeWordDetail]);
 
-  // Render content based on active tab
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'practice':
-        // Use offline practice if preferred or if we're offline with no WebSocket
-        return (preferOfflinePractice || (offlineMode && !wsConnected)) ? (
-          <OfflinePracticePage />
-        ) : (
-          <PracticePage />
-        );
-      case 'vocabulary':
-        return <VocabularyPage />;
-      case 'progress':
-        return <ProgressPage />;
-      case 'settings':
-        return <SettingsPage />;
-      default:
-        return <div>Page not found</div>;
-    }
-  };
+  // Determine which practice component to use
+  const PracticeComponent = (preferOfflinePractice || (offlineMode && !wsConnected)) 
+    ? OfflinePracticePage 
+    : PracticePage;
 
   return (
     <div className="h-full flex flex-col bg-neutral-50 text-neutral-900">
@@ -81,45 +144,19 @@ function AppContent() {
       
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto pb-16 safe-left safe-right">
-        {renderContent()}
+        <Routes>
+          <Route path="/game-selection" element={<GameSelectionPage />} />
+          <Route path="/practice" element={<PracticeComponent />} />
+          <Route path="/vocabulary" element={<VocabularyPage />} />
+          <Route path="/progress" element={<ProgressPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/component-builder" element={<ComponentBuilderPage />} />
+          <Route path="*" element={<Navigate to="/game-selection" replace />} />
+        </Routes>
       </main>
       
       {/* Bottom Navigation - with safe areas for iPhone */}
-      <nav className="fixed bottom-0 w-full bg-white border-t border-neutral-100 safe-bottom-nav">
-        <div className="flex justify-around safe-left safe-right">
-          <button 
-            onClick={() => setActiveTab('practice')}
-            className={`p-2 flex flex-col items-center ${activeTab === 'practice' ? 'text-red-500' : 'text-neutral-400'}`}
-          >
-            <Mic size={24} />
-            <span className="text-xs mt-1">Practice</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab('vocabulary')}
-            className={`p-2 flex flex-col items-center ${activeTab === 'vocabulary' ? 'text-red-500' : 'text-neutral-400'}`}
-          >
-            <BookOpen size={24} />
-            <span className="text-xs mt-1">Words</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab('progress')}
-            className={`p-2 flex flex-col items-center ${activeTab === 'progress' ? 'text-red-500' : 'text-neutral-400'}`}
-          >
-            <BarChart2 size={24} />
-            <span className="text-xs mt-1">Progress</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab('settings')}
-            className={`p-2 flex flex-col items-center ${activeTab === 'settings' ? 'text-red-500' : 'text-neutral-400'}`}
-          >
-            <Settings size={24} />
-            <span className="text-xs mt-1">Settings</span>
-          </button>
-        </div>
-      </nav>
+      <Navigation />
     </div>
   );
 }
