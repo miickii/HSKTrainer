@@ -1,21 +1,25 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, CheckCircle, XCircle, Volume2 } from "lucide-react";
+import { RefreshCw, CheckCircle, XCircle, Volume2, ExternalLink } from "lucide-react";
 import AudioRecorder from "../components/AudioRecorder";
 import { WebSocketUtils } from "../services/websocket-utils";
 import { vocabularyDB } from "../services/db";
 import { useApp } from "../context/AppContext";
+import WordDetailView from "../components/WordDetailView";
 
 export default function PracticePage() {
-  // Get context values instead of using props
+  // Get context values
   const { 
     wsRef, 
     wsConnected, 
     reconnectWebSocket,
     currentWord,
-    currentExample: example, // Alias to match your existing code
+    currentExample,
     selectNewWord,
     updateWord,
-    loading: propLoading
+    loading: propLoading,
+    openWordDetail,
+    detailViewActive,
+    detailViewWord
   } = useApp();
 
   const [transcription, setTranscription] = useState("");
@@ -39,7 +43,7 @@ export default function PracticePage() {
     }
   }, []);
   
-  // Request a new word and example using context function
+  // Request a new word and example
   const requestNewWord = useCallback(async () => {
     setLocalLoading(true);
     setTranscription("");
@@ -100,12 +104,12 @@ export default function PracticePage() {
 
   // Function to render the example sentence with highlighted target character
   const renderExampleSentence = () => {
-    if (!example || !example.simplified || !currentWord) return null;
+    if (!currentExample || !currentExample.simplified || !currentWord) return null;
     
     return (
       <div className="mt-3 mb-2 p-3 bg-neutral-50 rounded-lg border border-neutral-100">
         <div className="text-base leading-relaxed">
-          {example.simplified.split('').map((char, index) => (
+          {currentExample.simplified.split('').map((char, index) => (
             <span 
               key={index}
               className={char === currentWord.simplified ? 
@@ -118,9 +122,21 @@ export default function PracticePage() {
       </div>
     );
   };
+  
+  // Handle clicking on the character to view details
+  const handleWordClick = () => {
+    if (currentWord) {
+      openWordDetail(currentWord, 'practice');
+    }
+  };
 
   // Determine if the component is loading
   const isLoading = propLoading || localLoading;
+  
+  // If detail view is active, show the word detail component
+  if (detailViewActive && detailViewWord) {
+    return <WordDetailView mode="fullscreen" sourceScreen="practice" />;
+  }
 
   return (
     <div className="h-full flex flex-col p-3">
@@ -130,23 +146,34 @@ export default function PracticePage() {
         {currentWord && !isLoading ? (
           <div className="w-full max-w-md mx-auto bg-white rounded-xl shadow-sm border border-neutral-100 p-4 mb-3">
             <div className="text-center">
-              {/* Character and HSK level */}
-              <h2 className="text-2xl font-bold mb-1">{currentWord.simplified}</h2>
+              {/* Character and HSK level - Make clickable */}
+              <div 
+                className="cursor-pointer inline-block"
+                onClick={handleWordClick}
+              >
+                <h2 className="text-4xl font-bold mb-1 relative group">
+                  {currentWord.simplified}
+                  <ExternalLink 
+                    size={16} 
+                    className="absolute top-0 right-0 translate-x-full -translate-y-1/2 opacity-0 group-hover:opacity-100 text-neutral-400 transition-opacity" 
+                  />
+                </h2>
 
-              {transcription && (
-                <div>
-                  <h2 className="text-xl mb-1">{currentWord.pinyin}</h2>
-                  <h2 className="text-xl mb-1">{currentWord.english}</h2>
-                </div>
-              )}
-              
-              {currentWord.level && (
-                <div className="mb-2">
-                  <span className="px-2 py-1 bg-red-50 text-red-600 rounded-full text-xs font-medium">
-                    HSK {currentWord.level}
-                  </span>
-                </div>
-              )}
+                {transcription && (
+                  <>
+                    <h3 className="text-xl mb-1 text-red-500">{currentWord.pinyin}</h3>
+                    <h3 className="text-lg mb-2 text-neutral-700">{currentWord.english || currentWord.meanings}</h3>
+                  </>
+                )}
+                
+                {currentWord.level && (
+                  <div className="mb-2 inline-block">
+                    <span className="px-2 py-1 bg-red-50 text-red-600 rounded-full text-xs font-medium">
+                      HSK {currentWord.level}
+                    </span>
+                  </div>
+                )}
+              </div>
               
               {/* Example sentence */}
               {renderExampleSentence()}

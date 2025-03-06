@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Mic, BookOpen, BarChart2, Settings, WifiOff } from "lucide-react";
 import PracticePage from "./pages/PracticePage";
 import OfflinePracticePage from "./pages/OfflinePracticePage";
@@ -23,8 +23,28 @@ function AppContent() {
     offlineMode, 
     preferOfflinePractice, 
     wsConnected,
-    status
+    status,
+    detailViewActive,
+    closeWordDetail
   } = useApp();
+
+  // Handle back button for detail views
+  useEffect(() => {
+    const handleBackButton = (event) => {
+      // If a detail view is open, close it instead of navigating back in browser history
+      if (detailViewActive) {
+        event.preventDefault();
+        closeWordDetail();
+      }
+    };
+
+    // Add event listener for popstate (back button)
+    window.addEventListener('popstate', handleBackButton);
+    
+    return () => {
+      window.removeEventListener('popstate', handleBackButton);
+    };
+  }, [detailViewActive, closeWordDetail]);
 
   // Render content based on active tab
   const renderContent = () => {
@@ -58,11 +78,6 @@ function AppContent() {
           </div>
         </div>
       )}
-      
-      {/* App Header - Optimized for iPhone notch with safe area */}
-      <header className="bg-white py-4 px-4 safe-top safe-left safe-right border-b border-neutral-100">
-        <h1 className="text-xl font-bold text-center text-neutral-900">HSK Master</h1>
-      </header>
       
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto pb-16 safe-left safe-right">

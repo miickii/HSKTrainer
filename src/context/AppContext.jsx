@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { vocabularyDB } from '../services/db';
 import { useWebSocket } from '../hooks/useWebSocket';
 
@@ -25,6 +25,20 @@ export function AppProvider({ children }) {
   const [currentExample, setCurrentExample] = useState(null);
   const [loading, setLoading] = useState(true);
   
+  // Filtered vocabulary state
+  const [filteredVocabulary, setFilteredVocabulary] = useState([]);
+  const [isFiltering, setIsFiltering] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedLevel, setSelectedLevel] = useState(null);
+  const [filterType, setFilterType] = useState("all"); // all, mastered, learning, favorite
+  
+  // Word detail view state
+  const [detailViewActive, setDetailViewActive] = useState(false);
+  const [detailViewWord, setDetailViewWord] = useState(null);
+  const [navigationStack, setNavigationStack] = useState([]);
+  const [selectedWordId, setSelectedWordId] = useState(null);
+  
+  // Load vocabulary from database
   const loadVocabulary = useCallback(async () => {
     try {
       // Only load if not already loaded
@@ -54,7 +68,7 @@ export function AppProvider({ children }) {
           });
           
           setVocabularyWords(data);
-
+          setFilteredVocabulary(data); // Initialize filtered results with all words
         }
         
         setLoading(false);
@@ -68,15 +82,56 @@ export function AppProvider({ children }) {
   // Add this effect to load vocabulary when app starts
   useEffect(() => {
     loadVocabulary();
-    selectNewWord([1, 2, 3, 4, 5, 6, 7])
   }, [loadVocabulary]);
+
+  // Filter vocabulary based on search and filters
+  useEffect(() => {
+    if (vocabularyWords.length === 0) return;
+    
+    setIsFiltering(true);
+    
+    const timeoutId = setTimeout(() => {
+      const results = vocabularyWords.filter(word => {
+        let matches = true;
+        
+        if (selectedLevel !== null) {
+          matches = matches && word.level === selectedLevel;
+        }
+        
+        if (filterType === "mastered") {
+          matches = matches && (word.correctCount > 0);
+        } else if (filterType === "learning") {
+          matches = matches && (word.correctCount === 0);
+        } else if (filterType === "favorite") {
+          matches = matches && word.isFavorite;
+        }
+        
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          matches = matches && (
+            word.simplified.includes(searchTerm) ||
+            word.pinyin?.toLowerCase().includes(searchLower) ||
+            word.meanings?.toLowerCase().includes(searchLower) ||
+            word.english?.toLowerCase().includes(searchLower)
+          );
+        }
+        
+        return matches;
+      });
+      
+      setFilteredVocabulary(results);
+      setIsFiltering(false);
+    }, 10);
+    
+    return () => clearTimeout(timeoutId);
+  }, [vocabularyWords, searchTerm, selectedLevel, filterType]);
 
   const getExamplesFromWord = (word) => {
     if (!word || !word.examples) return [];
     return word.examples;
   };
   
-  // Function to select a new word (move this from practice pages)
+  // Function to select a new word for practice
   const selectNewWord = useCallback(async (hskLevels, showOnlySrsLevel0 = false) => {
     try {
       let word = null;
@@ -154,8 +209,9 @@ export function AppProvider({ children }) {
       console.error("Error selecting word:", error);
       return null;
     }
-  }, [vocabularyWords]);
+  }, [vocabularyWords, loadVocabulary]);
 
+  // Update a word in both the vocabulary list and current word if needed
   const updateWord = useCallback(async (id, updatedWord) => {
     try {
       try {
@@ -174,12 +230,53 @@ export function AppProvider({ children }) {
         setCurrentWord(updatedWord);
       }
       
+      // Update detail view word if it's the one we modified
+      if (detailViewWord && detailViewWord.id === id) {
+        setDetailViewWord(updatedWord);
+      }
+      
       return updatedWord;
     } catch (error) {
       console.error("Error updating word:", error);
       throw error;
     }
-  }, [currentWord]);
+  }, [currentWord, detailViewWord]);
+  
+  // Function to open word detail view
+  const openWordDetail = useCallback((word, sourceScreen) => {
+    // Save current navigation state
+    setNavigationStack(prev => [...prev, { screen: sourceScreen }]);
+    setDetailViewWord(word);
+    setDetailViewActive(true);
+    setSelectedWordId(word.id);
+  }, []);
+  
+  // Function to close word detail view and return to previous screen
+  const closeWordDetail = useCallback(() => {
+    // Get the last navigation item and remove it from the stack
+    const newStack = [...navigationStack];
+    const lastScreen = newStack.pop();
+    
+    setNavigationStack(newStack);
+    setDetailViewActive(false);
+    setDetailViewWord(null);
+    
+    return lastScreen?.screen || 'vocabulary'; // Default to vocabulary if no previous screen
+  }, [navigationStack]);
+  
+  // Function to find a word by ID
+  const findWordById = useCallback((id) => {
+    return vocabularyWords.find(word => word.id === id);
+  }, [vocabularyWords]);
+  
+  // Function to toggle expanded state for a word in vocabulary list
+  const toggleWordExpanded = useCallback((id) => {
+    if (selectedWordId === id) {
+      setSelectedWordId(null);
+    } else {
+      setSelectedWordId(id);
+    }
+  }, [selectedWordId]);
   
   const value = {
     // WebSocket state from hook
@@ -197,9 +294,28 @@ export function AppProvider({ children }) {
     currentExample,
     loading,
     
+    // Filtered vocabulary state
+    filteredVocabulary,
+    isFiltering,
+    searchTerm,
+    setSearchTerm,
+    selectedLevel,
+    setSelectedLevel,
+    filterType,
+    setFilterType,
+    
+    // Word detail view state
+    detailViewActive,
+    detailViewWord,
+    selectedWordId,
+    
     // Functions
     selectNewWord,
-    updateWord
+    updateWord,
+    openWordDetail,
+    closeWordDetail,
+    findWordById,
+    toggleWordExpanded
   };
   
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, CheckCircle, XCircle, ArrowRight, Eye, Bookmark } from "lucide-react";
+import { RefreshCw, CheckCircle, XCircle, ArrowRight, Eye, Bookmark, ExternalLink } from "lucide-react";
 import { vocabularyDB } from "../services/db";
 import { useApp } from "../context/AppContext";
+import WordDetailView from "../components/WordDetailView";
 
 export default function OfflinePracticePage() {
   const { 
@@ -9,7 +10,10 @@ export default function OfflinePracticePage() {
     currentExample, 
     selectNewWord, 
     updateWord,
-    loading
+    loading,
+    openWordDetail,
+    detailViewActive,
+    detailViewWord
   } = useApp();
 
   const [showDetails, setShowDetails] = useState(false);
@@ -28,9 +32,6 @@ export default function OfflinePracticePage() {
           const settings = JSON.parse(appSettings);
           if (settings.hskFocus && Array.isArray(settings.hskFocus)) {
             setHskLevels(settings.hskFocus);
-          }
-          if (settings.practiceMode) {
-            setPracticeMode(settings.practiceMode);
           }
           if (settings.showOnlySrsLevel0 !== undefined) {
             setShowOnlySrsLevel0(settings.showOnlySrsLevel0);
@@ -99,6 +100,18 @@ export default function OfflinePracticePage() {
       console.error("Error toggling favorite:", error);
     }
   };
+  
+  // Handle clicking on the character to view details
+  const handleWordClick = () => {
+    if (currentWord) {
+      openWordDetail(currentWord, 'offline-practice');
+    }
+  };
+  
+  // If detail view is active, show the word detail component
+  if (detailViewActive && detailViewWord) {
+    return <WordDetailView mode="fullscreen" sourceScreen="offline-practice" />;
+  }
 
   return (
     <div className="p-4 flex flex-col items-center space-y-6">
@@ -132,7 +145,17 @@ export default function OfflinePracticePage() {
       {currentWord ? (
         <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-neutral-100 p-5 flex flex-col items-center">
             <div className="text-center mb-6 w-full">
-                <h2 className="text-6xl font-bold mb-4">{currentWord.simplified}</h2>
+                {/* Make character clickable */}
+                <h2 
+                  className="text-6xl font-bold mb-4 cursor-pointer inline-block relative group"
+                  onClick={handleWordClick}
+                >
+                  {currentWord.simplified}
+                  <ExternalLink 
+                    size={16} 
+                    className="absolute top-0 right-0 translate-x-full -translate-y-1/2 opacity-0 group-hover:opacity-100 text-neutral-400 transition-opacity" 
+                  />
+                </h2>
                 
                 {currentExample ? (
                 <div className="mt-4">

@@ -1,64 +1,31 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Search, X, Filter, Heart, BookOpen, Volume2 } from "lucide-react";
+import React, { useRef } from "react";
+import { Search, X, Filter, Heart, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 import { vocabularyDB } from "../services/db";
-import { v4 as uuidv4 } from 'uuid';
 import { useApp } from "../context/AppContext";
+import WordDetailView from "../components/WordDetailView";
 
 export default function VocabularyPage() {
-  // Get context values 
-  const { vocabularyWords: words, loading, updateWord } = useApp();
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedLevel, setSelectedLevel] = useState(null);
-  const [filter, setFilter] = useState("all"); // all, mastered, learning, favorite
-  const [showDetailId, setShowDetailId] = useState(null);
-  const [isFiltering, setIsFiltering] = useState(true);
-  const [filteredResults, setFilteredResults] = useState([]);
+  // Get values from context
+  const { 
+    filteredVocabulary, 
+    loading, 
+    isFiltering, 
+    searchTerm, 
+    setSearchTerm,
+    selectedLevel, 
+    setSelectedLevel,
+    filterType, 
+    setFilterType,
+    selectedWordId,
+    toggleWordExpanded,
+    openWordDetail,
+    detailViewActive,
+    updateWord,
+    detailViewWord
+  } = useApp();
+  
   const searchInputRef = useRef(null);
 
-  const isLoading = loading || isFiltering;
-
-  // Filter and search words
-  useEffect(() => {
-    // Set filtering state immediately to show loading UI
-    setIsFiltering(true);
-    
-    // Defer the actual filtering to the next tick to let UI update
-    const timeoutId = setTimeout(() => {
-      const results = words.filter(word => {
-        let matches = true;
-        
-        if (selectedLevel !== null) {
-          matches = matches && word.level === selectedLevel;
-        }
-        
-        if (filter === "mastered") {
-          matches = matches && (word.correctCount > 0);
-        } else if (filter === "learning") {
-          matches = matches && (word.correctCount === 0);
-        } else if (filter === "favorite") {
-          matches = matches && word.isFavorite;
-        }
-        
-        if (searchTerm) {
-          const searchLower = searchTerm.toLowerCase();
-          matches = matches && (
-            word.simplified.includes(searchTerm) ||
-            word.pinyin?.toLowerCase().includes(searchLower) ||
-            word.meanings?.toLowerCase().includes(searchLower)
-          );
-        }
-        
-        return matches;
-      });
-      
-      setFilteredResults(results);
-      setIsFiltering(false);
-    }, 0); // 0ms timeout pushes this to the next event loop tick
-    
-    return () => clearTimeout(timeoutId);
-  }, [words, searchTerm, selectedLevel, filter]);
-  
   // Clear search
   const clearSearch = () => {
     setSearchTerm("");
@@ -67,24 +34,7 @@ export default function VocabularyPage() {
     }
   };
   
-  // Toggle favorite status
-  const toggleFavorite = async (id, e) => {
-    e.stopPropagation(); // Prevent opening details
-    
-    try {
-      const updatedWord = await vocabularyDB.toggleFavorite(id);
-      updateWord(id, updatedWord);
-    } catch (error) {
-      console.error("Error toggling favorite status:", error);
-    }
-  };
-  
-  // Toggle word details
-  const toggleDetails = (id) => {
-    setShowDetailId(showDetailId === id ? null : id);
-  };
-
-  // Format the next review date
+  // Format date for display
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Not set';
     
@@ -99,6 +49,25 @@ export default function VocabularyPage() {
     return new Date(dateStr).toLocaleDateString();
   };
 
+  const toggleFavorite = async (id, e) => {
+    e.stopPropagation(); // Prevent opening details
+    
+    try {
+      const updatedWord = await vocabularyDB.toggleFavorite(id);
+      
+      // Use the provided update function
+      updateWord(id, updatedWord);
+    } catch (error) {
+      console.error("Error toggling favorite status:", error);
+    }
+  };
+
+  // If detail view is active, show the word detail component
+  if (detailViewActive && detailViewWord) {
+    return <WordDetailView mode="fullscreen" sourceScreen="vocabulary" />;
+  }
+
+  // Render the vocabulary list
   return (
     <div className="p-4 pb-16">
       {/* Search Bar */}
@@ -157,9 +126,9 @@ export default function VocabularyPage() {
         {/* Mastery Filter */}
         <div className="flex space-x-2 overflow-x-auto -mx-4 px-4 py-1">
           <button
-            onClick={() => setFilter("all")}
+            onClick={() => setFilterType("all")}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center whitespace-nowrap flex-shrink-0 ${
-              filter === "all"
+              filterType === "all"
                 ? "bg-red-100 text-red-800"
                 : "bg-neutral-100 text-neutral-600"
             }`}
@@ -169,9 +138,9 @@ export default function VocabularyPage() {
           </button>
           
           <button
-            onClick={() => setFilter("mastered")}
+            onClick={() => setFilterType("mastered")}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center whitespace-nowrap flex-shrink-0 ${
-              filter === "mastered"
+              filterType === "mastered"
                 ? "bg-green-100 text-green-800"
                 : "bg-neutral-100 text-neutral-600"
             }`}
@@ -181,9 +150,9 @@ export default function VocabularyPage() {
           </button>
           
           <button
-            onClick={() => setFilter("learning")}
+            onClick={() => setFilterType("learning")}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center whitespace-nowrap flex-shrink-0 ${
-              filter === "learning"
+              filterType === "learning"
                 ? "bg-amber-100 text-amber-800"
                 : "bg-neutral-100 text-neutral-600"
             }`}
@@ -193,9 +162,9 @@ export default function VocabularyPage() {
           </button>
           
           <button
-            onClick={() => setFilter("favorite")}
+            onClick={() => setFilterType("favorite")}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center whitespace-nowrap flex-shrink-0 ${
-              filter === "favorite"
+              filterType === "favorite"
                 ? "bg-red-100 text-red-800"
                 : "bg-neutral-100 text-neutral-600"
             }`}
@@ -209,7 +178,7 @@ export default function VocabularyPage() {
       {/* Results Count */}
       {!loading && !isFiltering && (
         <div className="mb-4 text-sm text-neutral-500">
-          {filteredResults.length} {filteredResults.length === 1 ? 'word' : 'words'} found
+          {filteredVocabulary.length} {filteredVocabulary.length === 1 ? 'word' : 'words'} found
         </div>
       )}
       
@@ -224,23 +193,20 @@ export default function VocabularyPage() {
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-red-500"></div>
           <span className="ml-3">Filtering words...</span>
         </div>
-      ) : filteredResults.length === 0 ? (
+      ) : filteredVocabulary.length === 0 ? (
         <div className="text-center py-10">
           <div className="text-neutral-400 mb-2">No words found</div>
           <div className="text-sm text-neutral-500">Try adjusting your filters</div>
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredResults.map(word => (
+          {filteredVocabulary.map(word => (
             <div 
               key={word.id}
               className="bg-white rounded-xl shadow-sm border border-neutral-100 overflow-hidden"
             >
-              {/* Word Header */}
-              <div 
-                className="p-4 cursor-pointer"
-                onClick={() => toggleDetails(word.id)}
-              >
+              {/* Word Header - Clickable area */}
+              <div className="p-4 cursor-pointer" onClick={() => toggleWordExpanded(word.id)}>
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="flex items-center">
@@ -265,7 +231,7 @@ export default function VocabularyPage() {
                         Learning
                       </span>
                     )}
-                    
+
                     {/* Favorite Button */}
                     <button 
                       onClick={(e) => toggleFavorite(word.id, e)}
@@ -280,12 +246,21 @@ export default function VocabularyPage() {
                         fill={word.isFavorite ? 'currentColor' : 'none'} 
                       />
                     </button>
+                    
+                    {/* Expand indicator */}
+                    <button className="text-neutral-400">
+                      {selectedWordId === word.id ? (
+                        <ChevronUp size={18} />
+                      ) : (
+                        <ChevronDown size={18} />
+                      )}
+                    </button>
                   </div>
                 </div>
                 
                 {/* Meaning */}
                 <div className="mt-1 text-sm text-neutral-700">
-                  {word.meanings}
+                  {word.meanings || word.english}
                 </div>
                 
                 {/* SRS Level Indicator if available */}
@@ -303,9 +278,9 @@ export default function VocabularyPage() {
                 )}
               </div>
               
-              {/* Word Details */}
-              {showDetailId === word.id && (
-                <div className="px-4 pb-4 pt-2 border-t border-neutral-100 bg-neutral-50">
+              {/* Word Details - Expanded view */}
+              {selectedWordId === word.id && (
+                <div className="px-4 pb-2 pt-2 border-t border-neutral-100 bg-neutral-50">
                   {/* Statistics */}
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     <div className="text-center">
@@ -324,46 +299,31 @@ export default function VocabularyPage() {
                     </div>
                   </div>
 
-                  {/* Additional Info */}
-                  {word.traditional && word.traditional !== word.simplified && (
-                    <div className="mb-2">
-                      <span className="text-xs text-neutral-500 mr-1">Traditional:</span>
-                      <span className="text-neutral-800">{word.traditional}</span>
+                  {/* Examples Preview */}
+                  {word.examples && word.examples.length > 0 && (
+                    <div className="mt-3">
+                      <div className="text-sm font-medium text-neutral-700 mb-2">Example:</div>
+                      <div className="bg-white p-3 rounded-lg border border-neutral-100">
+                        <div className="text-base">
+                          {word.examples[0].simplified}
+                        </div>
+                        <div className="text-xs text-red-500 mt-1">{word.examples[0].pinyin}</div>
+                        {word.examples.length > 1 && (
+                          <div className="text-xs text-neutral-500 mt-2">
+                            +{word.examples.length - 1} more examples
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
-                  
-                  {word.radical && (
-                    <div className="mb-2">
-                      <span className="text-xs text-neutral-500 mr-1">Radical:</span>
-                      <span className="text-neutral-800">{word.radical}</span>
-                    </div>
-                  )}
-                  
-                  {/* Next Review Date */}
-                  {word.nextReview && (
-                    <div className="text-xs text-neutral-500 mb-4">
-                      Next review: {formatDate(word.nextReview)}
-                    </div>
-                  )}
-
-                  <h2 className="text-lg text-red-600 font-bold mb-2">Examples:</h2>
-
-                  {word.examples.map((example, index) => (
-                    <div 
-                      key={uuidv4()}
-                      className="mb-2 border-b"
+                  <div className="flex justify-center space-x-4 mt-2">
+                    <button
+                      onClick={() => openWordDetail(word, 'vocabulary')}
+                      className="px-2 py-1 bg-red-500 text-white rounded-lg text-sm font-medium"
                     >
-                      <div className="mb-2">
-                        <span className="">{example.simplified}</span>
-                      </div>
-                      <div className="mb-2">
-                        <span className="text-neutral-800">{example.pinyin}</span>
-                      </div>
-                      <div className="mb-2">
-                        <span className="text-neutral-800">{example.english}</span>
-                      </div>
-                    </div>
-                  ))}
+                      MORE
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
