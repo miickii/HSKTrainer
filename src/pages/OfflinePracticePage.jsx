@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { RefreshCw, CheckCircle, XCircle, ArrowRight, Eye, Bookmark } from "lucide-react";
 import { vocabularyDB } from "../services/db";
+import { useApp } from "../context/AppContext";
 
-export default function OfflinePracticePage({ 
-  currentWord, 
-  example, 
-  selectNewWord, 
-  updateWord,
-  loading
-}) {
+export default function OfflinePracticePage() {
+  const { 
+    currentWord, 
+    currentExample, 
+    selectNewWord, 
+    updateWord,
+    loading
+  } = useApp();
+
   const [showDetails, setShowDetails] = useState(false);
   const [answerStatus, setAnswerStatus] = useState(null); // "correct", "incorrect", or null
   const [hskLevels, setHskLevels] = useState([1, 2, 3]); // Default HSK levels to practice
@@ -131,16 +134,16 @@ export default function OfflinePracticePage({
             <div className="text-center mb-6 w-full">
                 <h2 className="text-6xl font-bold mb-4">{currentWord.simplified}</h2>
                 
-                {example ? (
+                {currentExample ? (
                 <div className="mt-4">
                     <div className="text-xl mt-2 mb-4 bg-neutral-50 p-3 rounded-lg border border-neutral-100">
-                        {example.simplified}
+                        {currentExample.simplified}
                     </div>
                     
                     {answerStatus && (
                     <div className="mt-3 text-neutral-700">
-                        <div className="text-sm text-red-500">{example.pinyin}</div>
-                        <div className="text-sm italic mt-1">{example.english}</div>
+                        <div className="text-sm text-red-500">{currentExample.pinyin}</div>
+                        <div className="text-sm italic mt-1">{currentExample.english}</div>
                     </div>
                     )}
                 </div>

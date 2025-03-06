@@ -14,14 +14,23 @@ import {
 } from "lucide-react";
 import { vocabularyDB } from "../services/db";
 import { ENDPOINTS } from "../services/api";
+import { useApp } from "../context/AppContext";
 
-export default function SettingsPage({ status, offlineMode }) {
+export default function SettingsPage() {
+  // Get context values
+  const { 
+    status, 
+    offlineMode, 
+    preferOfflinePractice, 
+    setPreferOfflinePractice 
+  } = useApp();
+
   const [settings, setSettings] = useState({
     useHoldToSpeak: true,
     showWaveform: true,
     sensitivity: 1.5,
     hskFocus: [1, 2, 3],
-    preferOfflinePractice: false,
+    preferOfflinePractice: false, // Will be overridden with context value
     preInitializeAudio: true
   });
   
@@ -105,7 +114,14 @@ export default function SettingsPage({ status, offlineMode }) {
           const parsedSettings = JSON.parse(appSettings);
           setSettings(prev => ({
             ...prev,
-            ...parsedSettings
+            ...parsedSettings,
+            preferOfflinePractice // Always use the value from context
+          }));
+        } else {
+          // If no settings in localStorage, use context value for offline mode
+          setSettings(prev => ({
+            ...prev,
+            preferOfflinePractice
           }));
         }
         
@@ -117,12 +133,17 @@ export default function SettingsPage({ status, offlineMode }) {
     };
     
     loadSettings();
-  }, []);
+  }, [preferOfflinePractice]);
   
   // Save a setting
   const saveSetting = async (key, value) => {
     try {
       setSaving(true);
+      
+      // If changing offline practice mode, update context too
+      if (key === 'preferOfflinePractice') {
+        setPreferOfflinePractice(value);
+      }
       
       // Update local state
       setSettings(prev => ({
@@ -148,7 +169,6 @@ export default function SettingsPage({ status, offlineMode }) {
   
   // Toggle boolean setting
   const toggleSetting = (key) => {
-    console.log(key)
     saveSetting(key, !settings[key]);
   };
 

@@ -3,17 +3,21 @@ import { RefreshCw, CheckCircle, XCircle, Volume2 } from "lucide-react";
 import AudioRecorder from "../components/AudioRecorder";
 import { WebSocketUtils } from "../services/websocket-utils";
 import { vocabularyDB } from "../services/db";
+import { useApp } from "../context/AppContext";
 
-export default function PracticePage({ 
-  wsRef, 
-  wsConnected, 
-  reconnectWebSocket,
-  currentWord,
-  example,
-  selectNewWord,
-  updateWord,
-  loading: propLoading
-}) {
+export default function PracticePage() {
+  // Get context values instead of using props
+  const { 
+    wsRef, 
+    wsConnected, 
+    reconnectWebSocket,
+    currentWord,
+    currentExample: example, // Alias to match your existing code
+    selectNewWord,
+    updateWord,
+    loading: propLoading
+  } = useApp();
+
   const [transcription, setTranscription] = useState("");
   const [results, setResults] = useState(null);
   const [localLoading, setLocalLoading] = useState(false);
@@ -35,7 +39,7 @@ export default function PracticePage({
     }
   }, []);
   
-  // Request a new word and example using parent function
+  // Request a new word and example using context function
   const requestNewWord = useCallback(async () => {
     setLocalLoading(true);
     setTranscription("");
@@ -43,7 +47,6 @@ export default function PracticePage({
     setError(null);
     
     try {
-      // Use the selectNewWord function from props
       const word = await selectNewWord(hskLevels, false);
       
       if (!word) {
@@ -78,10 +81,10 @@ export default function PracticePage({
       try {
         // Check if the word is in the transcription
         const containsWord = transcribedText.includes(currentWord.simplified);
-        const updatedWord = await vocabularyDB.updateWordAfterPractice(id, containsWord);
+        const updatedWord = await vocabularyDB.updateWordAfterPractice(currentWord.id, containsWord);
         
-        // Update the word's learning progress using the function from props
-        updateWord(currentWord.id, updateWord);
+        // Update the word's learning progress
+        updateWord(currentWord.id, updatedWord);
         
         // Set results for display
         setResults({
@@ -97,12 +100,12 @@ export default function PracticePage({
 
   // Function to render the example sentence with highlighted target character
   const renderExampleSentence = () => {
-    if (!example || !example.chinese || !currentWord) return null;
+    if (!example || !example.simplified || !currentWord) return null;
     
     return (
       <div className="mt-3 mb-2 p-3 bg-neutral-50 rounded-lg border border-neutral-100">
         <div className="text-base leading-relaxed">
-          {example.chinese.split('').map((char, index) => (
+          {example.simplified.split('').map((char, index) => (
             <span 
               key={index}
               className={char === currentWord.simplified ? 

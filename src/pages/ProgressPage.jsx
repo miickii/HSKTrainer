@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { CheckCircle, RefreshCw } from "lucide-react";
+import { useApp } from "../context/AppContext";
 
-export default function ProgressPage({ words, loading: propLoading }) {
+export default function ProgressPage() {
+  // Get context values
+  const { vocabularyWords: words, loading: propLoading } = useApp();
+  
   // Use local loading state for processing the data
   const [localLoading, setLocalLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -10,13 +14,12 @@ export default function ProgressPage({ words, loading: propLoading }) {
     masteredByLevel: []
   });
   
-  // Calculate statistics based on prop words
+  // Calculate statistics based on words from context
   useEffect(() => {
     async function calculateStats() {
       try {
         setLocalLoading(true);
         
-        // Use the words passed from props
         const allWords = words || [];
         
         // Calculate mastered words (correct at least once)

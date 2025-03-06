@@ -1,9 +1,13 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Search, X, Filter, Heart, BookOpen, Volume2 } from "lucide-react";
 import { vocabularyDB } from "../services/db";
 import { v4 as uuidv4 } from 'uuid';
+import { useApp } from "../context/AppContext";
 
-export default function VocabularyPage({ words, loading, updateWord }) {
+export default function VocabularyPage() {
+  // Get context values 
+  const { vocabularyWords: words, loading, updateWord } = useApp();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedLevel, setSelectedLevel] = useState(null);
   const [filter, setFilter] = useState("all"); // all, mastered, learning, favorite
@@ -24,7 +28,6 @@ export default function VocabularyPage({ words, loading, updateWord }) {
       const results = words.filter(word => {
         let matches = true;
         
-        // Your existing filter logic
         if (selectedLevel !== null) {
           matches = matches && word.level === selectedLevel;
         }
@@ -54,7 +57,7 @@ export default function VocabularyPage({ words, loading, updateWord }) {
     }, 0); // 0ms timeout pushes this to the next event loop tick
     
     return () => clearTimeout(timeoutId);
-  }, [words, searchTerm, selectedLevel, filter, updateWord]);
+  }, [words, searchTerm, selectedLevel, filter]);
   
   // Clear search
   const clearSearch = () => {
@@ -70,8 +73,6 @@ export default function VocabularyPage({ words, loading, updateWord }) {
     
     try {
       const updatedWord = await vocabularyDB.toggleFavorite(id);
-      
-      // Use the provided update function
       updateWord(id, updatedWord);
     } catch (error) {
       console.error("Error toggling favorite status:", error);
